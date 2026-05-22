@@ -38,7 +38,8 @@ builder.Services.AddLogging(x => x.AddConsole());
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseMySql(connectionString, new MySqlServerVersion(new Version(8, 0, 36))));
+    options.UseMySql(connectionString, new MySqlServerVersion(new Version(8, 0, 36)),
+        mysqlOptions => mysqlOptions.EnableRetryOnFailure(maxRetryCount: 5)));
 builder.Services.AddScoped<IInventoryRepository, MySqlInventoryRepository>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<CustomAuthProvider>();
@@ -52,7 +53,11 @@ try
     using var scope = app.Services.CreateScope();
     var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
-    dbContext.Database.EnsureCreated();
+    var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+    var maskedCs = connectionString.Length > 30 ? connectionString.Substring(0, 30) + "..." : connectionString;
+    logger.LogInformation("Connecting to MySQL: {Cs}", maskedCs);
+
+    await dbContext.Database.EnsureCreatedAsync();
 
     try
     {
