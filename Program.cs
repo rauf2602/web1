@@ -7,7 +7,7 @@ using Microsoft.Extensions.Logging;
 var builder = WebApplication.CreateBuilder(args);
 
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
-    ?? "Data Source=/app/data/store.db";
+    ?? "Data Source=store.db";
 
 builder.Services.AddLogging(x => x.AddConsole());
 
