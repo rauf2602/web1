@@ -9,37 +9,32 @@ var builder = WebApplication.CreateBuilder(args);
 static string Env(string key, string fallback) =>
     Environment.GetEnvironmentVariable(key) ?? fallback;
 
-var mysqlUrl = Env("MYSQL_URL", Env("MYSQLDATABASE", Env("MYSQLDATABASE_URL", Env("DATABASE_URL", Env("MYSQL_PRIVATE_URL", "")))));
+string BuildCs()
+{
+    var url = Env("MYSQL_URL", Env("MYSQLDATABASE_URL", Env("DATABASE_URL", Env("MYSQL_PRIVATE_URL", ""))));
+    if (!string.IsNullOrEmpty(url) && Uri.TryCreate(url, UriKind.Absolute, out var u))
+        return $"server={u.Host};port={u.Port};database={u.AbsolutePath.TrimStart('/')};user={u.UserInfo.Split(':')[0]};password={u.UserInfo.Split(':')[1]};SslMode=Required;AllowPublicKeyRetrieval=true;CharSet=utf8mb4;";
+
+    var host = Env("MYSQLHOST", Env("MYSQL_HOST", ""));
+    var port = Env("MYSQLPORT", Env("MYSQL_PORT", "3306"));
+    var db = Env("MYSQLDATABASE", Env("MYSQL_DATABASE", ""));
+    var user = Env("MYSQLUSER", Env("MYSQL_USER", ""));
+    var pass = Env("MYSQLPASSWORD", Env("MYSQL_PASSWORD", ""));
+    if (!string.IsNullOrEmpty(host) && !string.IsNullOrEmpty(db))
+        return $"server={host};port={port};database={db};user={user};password={pass};SslMode=Required;AllowPublicKeyRetrieval=true;CharSet=utf8mb4;";
+
+    return builder.Configuration.GetConnectionString("DefaultConnection")
+        ?? "server=localhost;port=3306;database=store_manager_db;user=root;password=;";
+}
+
 Console.WriteLine($"MYSQL_URL exists: {!string.IsNullOrEmpty(Env("MYSQL_URL", ""))}");
 Console.WriteLine($"MYSQLDATABASE exists: {!string.IsNullOrEmpty(Env("MYSQLDATABASE", ""))}");
-Console.WriteLine($"MYSQLDATABASE_URL exists: {!string.IsNullOrEmpty(Env("MYSQLDATABASE_URL", ""))}");
-Console.WriteLine($"DATABASE_URL exists: {!string.IsNullOrEmpty(Env("DATABASE_URL", ""))}");
-Console.WriteLine($"MYSQL_PRIVATE_URL exists: {!string.IsNullOrEmpty(Env("MYSQL_PRIVATE_URL", ""))}");
-Console.WriteLine($"Using mysqlUrl: {mysqlUrl?.Substring(0, Math.Min(60, mysqlUrl?.Length ?? 0))}...");
-Console.WriteLine($"URL length: {mysqlUrl?.Length}");
-Console.WriteLine($"Parsed -> host: '{ParseUrl(mysqlUrl, "host")}' port: '{ParseUrl(mysqlUrl, "port")}' db: '{ParseUrl(mysqlUrl, "path")}' user: '{ParseUrl(mysqlUrl, "user")}'");
-var connectionString = !string.IsNullOrEmpty(mysqlUrl)
-    ? $"server={ParseUrl(mysqlUrl, "host")};port={ParseUrl(mysqlUrl, "port")};database={ParseUrl(mysqlUrl, "path").TrimStart('/')};user={ParseUrl(mysqlUrl, "user")};password={ParseUrl(mysqlUrl, "password")};SslMode=Required;AllowPublicKeyRetrieval=true;CharSet=utf8mb4;"
-    : builder.Configuration.GetConnectionString("DefaultConnection")
-    ?? "server=localhost;port=3306;database=store_manager_db;user=root;password=;";
-
-static string ParseUrl(string url, string part)
-{
-    try
-    {
-        var u = new Uri(url);
-        return part switch
-        {
-            "host" => u.Host,
-            "port" => u.Port.ToString(),
-            "path" => u.AbsolutePath,
-            "user" => u.UserInfo.Split(':')[0],
-            "password" => u.UserInfo.Split(':')[1],
-            _ => ""
-        };
-    }
-    catch { return ""; }
-}
+Console.WriteLine($"MYSQLHOST exists: {!string.IsNullOrEmpty(Env("MYSQLHOST", ""))}");
+Console.WriteLine($"MYSQLPORT exists: {!string.IsNullOrEmpty(Env("MYSQLPORT", ""))}");
+Console.WriteLine($"MYSQLUSER exists: {!string.IsNullOrEmpty(Env("MYSQLUSER", ""))}");
+Console.WriteLine($"MYSQLPASSWORD exists: {!string.IsNullOrEmpty(Env("MYSQLPASSWORD", ""))}");
+var connectionString = BuildCs();
+Console.WriteLine($"Built connection string: {(connectionString.Length > 50 ? connectionString[..50] + "..." : connectionString)}");
 
 builder.Services.AddLogging(x => x.AddConsole());
 
