@@ -5,11 +5,36 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
 var builder = WebApplication.CreateBuilder(args);
-var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
-    ?? $"server={Env("MYSQL_HOST", "localhost")};port={Env("MYSQL_PORT", "3306")};database={Env("MYSQL_DATABASE", "store_manager_db")};user={Env("MYSQL_USER", "root")};password={Env("MYSQL_PASSWORD", "")};";
 
 static string Env(string key, string fallback) =>
     Environment.GetEnvironmentVariable(key) ?? fallback;
+
+static string Env2(string k1, string k2, string fallback) =>
+    Environment.GetEnvironmentVariable(k1) ?? Environment.GetEnvironmentVariable(k2) ?? fallback;
+
+var mysqlUrl = Env("MYSQL_URL", "");
+var connectionString = !string.IsNullOrEmpty(mysqlUrl)
+    ? $"server={ParseUrl(mysqlUrl, "host")};port={ParseUrl(mysqlUrl, "port")};database={ParseUrl(mysqlUrl, "path").TrimStart('/')};user={ParseUrl(mysqlUrl, "user")};password={ParseUrl(mysqlUrl, "password")};"
+    : builder.Configuration.GetConnectionString("DefaultConnection")
+    ?? $"server={Env2("MYSQLHOST", "MYSQL_HOST", "localhost")};port={Env2("MYSQLPORT", "MYSQL_PORT", "3306")};database={Env2("MYSQLDATABASE", "MYSQL_DATABASE", "store_manager_db")};user={Env2("MYSQLUSER", "MYSQL_USER", "root")};password={Env2("MYSQLPASSWORD", "MYSQL_PASSWORD", "")};";
+
+static string ParseUrl(string url, string part)
+{
+    try
+    {
+        var u = new Uri(url);
+        return part switch
+        {
+            "host" => u.Host,
+            "port" => u.Port.ToString(),
+            "path" => u.AbsolutePath,
+            "user" => u.UserInfo.Split(':')[0],
+            "password" => u.UserInfo.Split(':')[1],
+            _ => ""
+        };
+    }
+    catch { return ""; }
+}
 
 builder.Services.AddLogging(x => x.AddConsole());
 
