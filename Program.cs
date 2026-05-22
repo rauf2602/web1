@@ -15,7 +15,9 @@ Console.WriteLine($"MYSQLDATABASE exists: {!string.IsNullOrEmpty(Env("MYSQLDATAB
 Console.WriteLine($"MYSQLDATABASE_URL exists: {!string.IsNullOrEmpty(Env("MYSQLDATABASE_URL", ""))}");
 Console.WriteLine($"DATABASE_URL exists: {!string.IsNullOrEmpty(Env("DATABASE_URL", ""))}");
 Console.WriteLine($"MYSQL_PRIVATE_URL exists: {!string.IsNullOrEmpty(Env("MYSQL_PRIVATE_URL", ""))}");
-Console.WriteLine($"Using mysqlUrl: {mysqlUrl?.Substring(0, Math.Min(30, mysqlUrl?.Length ?? 0))}...");
+Console.WriteLine($"Using mysqlUrl: {mysqlUrl?.Substring(0, Math.Min(60, mysqlUrl?.Length ?? 0))}...");
+Console.WriteLine($"URL length: {mysqlUrl?.Length}");
+Console.WriteLine($"Parsed -> host: '{ParseUrl(mysqlUrl, "host")}' port: '{ParseUrl(mysqlUrl, "port")}' db: '{ParseUrl(mysqlUrl, "path")}' user: '{ParseUrl(mysqlUrl, "user")}'");
 var connectionString = !string.IsNullOrEmpty(mysqlUrl)
     ? $"server={ParseUrl(mysqlUrl, "host")};port={ParseUrl(mysqlUrl, "port")};database={ParseUrl(mysqlUrl, "path").TrimStart('/')};user={ParseUrl(mysqlUrl, "user")};password={ParseUrl(mysqlUrl, "password")};SslMode=Required;AllowPublicKeyRetrieval=true;CharSet=utf8mb4;"
     : builder.Configuration.GetConnectionString("DefaultConnection")
