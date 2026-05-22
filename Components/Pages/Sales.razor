@@ -7,7 +7,7 @@
 @inject CustomAuthProvider AuthState
 @inject NavigationManager Nav
 @inject IInventoryRepository InventoryRepository
-@inject AppDbContext DbContext
+@inject IDbContextFactory<AppDbContext> DbFactory
 
 <div class="sales-page">
     <!-- Header -->
@@ -1234,7 +1234,8 @@
     {
         try
         {
-            recentSales = await DbContext.Sales
+            await using var db = await DbFactory.CreateDbContextAsync();
+            recentSales = await db.Sales
                 .OrderByDescending(s => s.SaleDate)
                 .Take(10)
                 .ToListAsync();
@@ -1268,6 +1269,7 @@
 
         try
         {
+            await using var db = await DbFactory.CreateDbContextAsync();
             var freshProducts = await InventoryRepository.GetAllAsync();
 
             foreach (var item in cart)
@@ -1288,12 +1290,12 @@
                 TotalPrice = CartTotal
             };
 
-            DbContext.Sales.Add(sale);
-            await DbContext.SaveChangesAsync();
+            db.Sales.Add(sale);
+            await db.SaveChangesAsync();
 
             foreach (var item in cart)
             {
-                DbContext.SaleItems.Add(new SaleItem
+                db.SaleItems.Add(new SaleItem
                 {
                     SaleId = sale.Id,
                     ProductId = item.ProductId,
@@ -1310,7 +1312,7 @@
                 product.Quantity -= item.Quantity;
                 product.TotalAmount = product.Quantity * product.Price;
 
-                DbContext.ProductLogs.Add(new ProductLog
+                db.ProductLogs.Add(new ProductLog
                 {
                     ProductName = item.ProductName,
                     ProductId = item.ProductId,
@@ -1321,7 +1323,7 @@
                 });
             }
 
-            await DbContext.SaveChangesAsync();
+            await db.SaveChangesAsync();
 
             successMessage = $"Sale completed! Total: {CartTotal:N0} UZS";
             cart = new List<CartItem>();

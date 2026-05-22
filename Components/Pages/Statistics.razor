@@ -5,7 +5,7 @@
 @using Microsoft.EntityFrameworkCore
 @inject CustomAuthProvider AuthState
 @inject NavigationManager Nav
-@inject AppDbContext DbContext
+@inject IDbContextFactory<AppDbContext> DbFactory
 
 <div class="stats-page">
     <div class="stats-header">
@@ -1122,10 +1122,11 @@
 
         try
         {
+            await using var db = await DbFactory.CreateDbContextAsync();
             var start = new DateTime(selectedMonth.Year, selectedMonth.Month, 1);
             var end = start.AddMonths(1);
 
-            var logs = await DbContext.ProductLogs
+            var logs = await db.ProductLogs
                 .Where(x => x.Date >= start && x.Date < end)
                 .OrderByDescending(x => x.Date)
                 .ToListAsync();
@@ -1139,9 +1140,9 @@
             totalOutgoing = logs.Where(x => x.Action == "Outgoing" || x.Action == "KETDI").Sum(x => x.ChangeQty);
             outgoingCount = logs.Count(x => x.Action == "Outgoing" || x.Action == "KETDI");
 
-            currentStock = await DbContext.InventoryItems.SumAsync(x => x.Quantity);
+            currentStock = await db.InventoryItems.SumAsync(x => x.Quantity);
 
-            var items = await DbContext.InventoryItems.ToListAsync();
+            var items = await db.InventoryItems.ToListAsync();
 
             productStats = logs
                 .GroupBy(x => x.ProductId)

@@ -4,33 +4,37 @@ using Microsoft.EntityFrameworkCore;
 
 namespace BlazorApp4.Services;
 
-public sealed class MySqlInventoryRepository(AppDbContext dbContext) : IInventoryRepository
+public sealed class MySqlInventoryRepository(IDbContextFactory<AppDbContext> contextFactory) : IInventoryRepository
 {
-    public Task<List<InventoryItem>> GetAllAsync() =>
-        dbContext.InventoryItems
+    public async Task<List<InventoryItem>> GetAllAsync()
+    {
+        await using var db = await contextFactory.CreateDbContextAsync();
+        return await db.InventoryItems
             .OrderByDescending(x => x.Id)
             .ToListAsync();
+    }
 
-    public Task<InventoryItem?> GetByIdAsync(int id) =>
-        dbContext.InventoryItems.FirstOrDefaultAsync(x => x.Id == id);
+    public async Task<InventoryItem?> GetByIdAsync(int id)
+    {
+        await using var db = await contextFactory.CreateDbContextAsync();
+        return await db.InventoryItems.FirstOrDefaultAsync(x => x.Id == id);
+    }
 
     public async Task<InventoryItem> AddAsync(InventoryItem item)
     {
+        await using var db = await contextFactory.CreateDbContextAsync();
         item.TotalAmount = item.Quantity * item.Price;
         item.Date = DateTime.Now;
-
-        dbContext.InventoryItems.Add(item);
-        await dbContext.SaveChangesAsync();
+        db.InventoryItems.Add(item);
+        await db.SaveChangesAsync();
         return item;
     }
 
     public async Task<bool> UpdateAsync(InventoryItem item)
     {
-        var existing = await dbContext.InventoryItems.FirstOrDefaultAsync(x => x.Id == item.Id);
-        if (existing is null)
-        {
-            return false;
-        }
+        await using var db = await contextFactory.CreateDbContextAsync();
+        var existing = await db.InventoryItems.FirstOrDefaultAsync(x => x.Id == item.Id);
+        if (existing is null) return false;
 
         existing.Name = item.Name;
         existing.Quantity = item.Quantity;
@@ -39,20 +43,18 @@ public sealed class MySqlInventoryRepository(AppDbContext dbContext) : IInventor
         existing.Date = DateTime.Now;
         existing.MinLevel = item.MinLevel;
 
-        await dbContext.SaveChangesAsync();
+        await db.SaveChangesAsync();
         return true;
     }
 
     public async Task<bool> DeleteAsync(int id)
     {
-        var existing = await dbContext.InventoryItems.FirstOrDefaultAsync(x => x.Id == id);
-        if (existing is null)
-        {
-            return false;
-        }
+        await using var db = await contextFactory.CreateDbContextAsync();
+        var existing = await db.InventoryItems.FirstOrDefaultAsync(x => x.Id == id);
+        if (existing is null) return false;
 
-        dbContext.InventoryItems.Remove(existing);
-        await dbContext.SaveChangesAsync();
+        db.InventoryItems.Remove(existing);
+        await db.SaveChangesAsync();
         return true;
     }
 }

@@ -6,7 +6,7 @@
 @using Microsoft.EntityFrameworkCore
 @inject CustomAuthProvider AuthState
 @inject NavigationManager Nav
-@inject AppDbContext DbContext
+@inject IDbContextFactory<AppDbContext> DbFactory
 
 <h2 class="text-center mt-4">Store Manager</h2>
 
@@ -926,7 +926,8 @@
     {
         try
         {
-            var query = DbContext.ProductLogs.OrderByDescending(x => x.Date).AsQueryable();
+            await using var db = await DbFactory.CreateDbContextAsync();
+            var query = db.ProductLogs.OrderByDescending(x => x.Date).AsQueryable();
             if (!string.IsNullOrWhiteSpace(historySearch))
             {
                 var s = historySearch.ToLower();
@@ -1083,16 +1084,19 @@
                 existing.Quantity += newQuantity;
                 existing.TotalAmount = existing.Quantity * existing.Price;
                 await Repository.UpdateAsync(existing);
-                DbContext.ProductLogs.Add(new ProductLog
+                await using (var db = await DbFactory.CreateDbContextAsync())
                 {
-                    ProductName = newProductName,
-                    ProductId = existing.Id,
-                    Action = "Incoming",
-                    PreviousQty = prevQty,
-                    ChangeQty = newQuantity,
-                    NewQty = existing.Quantity
-                });
-                await DbContext.SaveChangesAsync();
+                    db.ProductLogs.Add(new ProductLog
+                    {
+                        ProductName = newProductName,
+                        ProductId = existing.Id,
+                        Action = "Incoming",
+                        PreviousQty = prevQty,
+                        ChangeQty = newQuantity,
+                        NewQty = existing.Quantity
+                    });
+                    await db.SaveChangesAsync();
+                }
                 errorMessage = $"Updated: '{newProductName}' {prevQty} +{newQuantity} → {existing.Quantity}";
             }
             else
@@ -1148,7 +1152,8 @@
 
             if (diff != 0)
             {
-                DbContext.ProductLogs.Add(new ProductLog
+                await using var db = await DbFactory.CreateDbContextAsync();
+                db.ProductLogs.Add(new ProductLog
                 {
                     ProductName = newProductName,
                     ProductId = editId,
@@ -1157,7 +1162,7 @@
                     ChangeQty = Math.Abs(diff),
                     NewQty = newQuantity
                 });
-                await DbContext.SaveChangesAsync();
+                await db.SaveChangesAsync();
             }
 
             await LoadDataAsync();

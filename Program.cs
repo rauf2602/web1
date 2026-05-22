@@ -9,9 +9,13 @@ var builder = WebApplication.CreateBuilder(args);
 static string Env(string key, string fallback) =>
     Environment.GetEnvironmentVariable(key) ?? fallback;
 
-var mysqlUrl = Env("MYSQL_URL", "");
+var mysqlUrl = Env("MYSQL_URL", Env("DATABASE_URL", Env("MYSQL_PRIVATE_URL", "")));
+Console.WriteLine($"MYSQL_URL exists: {!string.IsNullOrEmpty(Env("MYSQL_URL", ""))}");
+Console.WriteLine($"DATABASE_URL exists: {!string.IsNullOrEmpty(Env("DATABASE_URL", ""))}");
+Console.WriteLine($"MYSQL_PRIVATE_URL exists: {!string.IsNullOrEmpty(Env("MYSQL_PRIVATE_URL", ""))}");
+Console.WriteLine($"Using mysqlUrl: {mysqlUrl?.Substring(0, Math.Min(30, mysqlUrl?.Length ?? 0))}...");
 var connectionString = !string.IsNullOrEmpty(mysqlUrl)
-    ? $"server={ParseUrl(mysqlUrl, "host")};port={ParseUrl(mysqlUrl, "port")};database={ParseUrl(mysqlUrl, "path").TrimStart('/')};user={ParseUrl(mysqlUrl, "user")};password={ParseUrl(mysqlUrl, "password")};"
+    ? $"server={ParseUrl(mysqlUrl, "host")};port={ParseUrl(mysqlUrl, "port")};database={ParseUrl(mysqlUrl, "path").TrimStart('/')};user={ParseUrl(mysqlUrl, "user")};password={ParseUrl(mysqlUrl, "password")};SslMode=Required;AllowPublicKeyRetrieval=true;CharSet=utf8mb4;"
     : builder.Configuration.GetConnectionString("DefaultConnection")
     ?? "server=localhost;port=3306;database=store_manager_db;user=root;password=;";
 
@@ -37,7 +41,7 @@ builder.Services.AddLogging(x => x.AddConsole());
 
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
-builder.Services.AddDbContext<AppDbContext>(options =>
+builder.Services.AddDbContextFactory<AppDbContext>(options =>
     options.UseMySql(connectionString, new MySqlServerVersion(new Version(8, 0, 36)),
         mysqlOptions => mysqlOptions.EnableRetryOnFailure(maxRetryCount: 5)));
 builder.Services.AddScoped<IInventoryRepository, MySqlInventoryRepository>();
@@ -51,9 +55,12 @@ var app = builder.Build();
 try
 {
     using var scope = app.Services.CreateScope();
-    var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    var factory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<AppDbContext>>();
+    await using var dbContext = await factory.CreateDbContextAsync();
 
     var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+    var hasUrl = !string.IsNullOrEmpty(Env("MYSQL_URL", "")) || !string.IsNullOrEmpty(Env("DATABASE_URL", ""));
+    logger.LogInformation("MySQL env URL found: {HasUrl}, using connection string", hasUrl);
     var maskedCs = connectionString.Length > 30 ? connectionString.Substring(0, 30) + "..." : connectionString;
     logger.LogInformation("Connecting to MySQL: {Cs}", maskedCs);
 
