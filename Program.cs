@@ -67,6 +67,36 @@ try
 
     try
     {
+        dbContext.Database.ExecuteSqlRaw(@"
+            CREATE TABLE IF NOT EXISTS inventory_items (
+                Id INT AUTO_INCREMENT PRIMARY KEY,
+                Name VARCHAR(150) NOT NULL,
+                Quantity INT NOT NULL,
+                Price DECIMAL(18,2) NOT NULL,
+                TotalAmount DECIMAL(18,2) NOT NULL,
+                Date DATETIME NOT NULL,
+                MinLevel INT NOT NULL DEFAULT 5,
+                ImageUrl VARCHAR(500) NOT NULL DEFAULT ''
+            )");
+        Console.WriteLine("InventoryItems table ready.");
+    }
+    catch { }
+
+    try
+    {
+        dbContext.Database.ExecuteSqlRaw(@"
+            CREATE TABLE IF NOT EXISTS users (
+                Id INT AUTO_INCREMENT PRIMARY KEY,
+                Username VARCHAR(100) NOT NULL,
+                PasswordHash VARCHAR(255) NOT NULL,
+                CreatedAt DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6)
+            )");
+        Console.WriteLine("Users table ready.");
+    }
+    catch { }
+
+    try
+    {
         dbContext.Database.ExecuteSqlRaw("ALTER TABLE inventory_items ADD COLUMN MinLevel INT NOT NULL DEFAULT 5");
         Console.WriteLine("MinLevel column added.");
     }
