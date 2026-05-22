@@ -9,8 +9,10 @@ var builder = WebApplication.CreateBuilder(args);
 static string Env(string key, string fallback) =>
     Environment.GetEnvironmentVariable(key) ?? fallback;
 
-var mysqlUrl = Env("MYSQL_URL", Env("DATABASE_URL", Env("MYSQL_PRIVATE_URL", "")));
+var mysqlUrl = Env("MYSQL_URL", Env("MYSQLDATABASE", Env("MYSQLDATABASE_URL", Env("DATABASE_URL", Env("MYSQL_PRIVATE_URL", "")))));
 Console.WriteLine($"MYSQL_URL exists: {!string.IsNullOrEmpty(Env("MYSQL_URL", ""))}");
+Console.WriteLine($"MYSQLDATABASE exists: {!string.IsNullOrEmpty(Env("MYSQLDATABASE", ""))}");
+Console.WriteLine($"MYSQLDATABASE_URL exists: {!string.IsNullOrEmpty(Env("MYSQLDATABASE_URL", ""))}");
 Console.WriteLine($"DATABASE_URL exists: {!string.IsNullOrEmpty(Env("DATABASE_URL", ""))}");
 Console.WriteLine($"MYSQL_PRIVATE_URL exists: {!string.IsNullOrEmpty(Env("MYSQL_PRIVATE_URL", ""))}");
 Console.WriteLine($"Using mysqlUrl: {mysqlUrl?.Substring(0, Math.Min(30, mysqlUrl?.Length ?? 0))}...");
