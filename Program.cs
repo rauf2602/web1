@@ -6,35 +6,116 @@ using Microsoft.Extensions.Logging;
 
 var builder = WebApplication.CreateBuilder(args);
 
-static string Env(string key, string fallback) =>
-    Environment.GetEnvironmentVariable(key) ?? fallback;
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
+    ?? "Data Source=/app/data/store.db";
 
-static string Env2(string k1, string k2, string fallback) =>
-    Environment.GetEnvironmentVariable(k1) ?? Environment.GetEnvironmentVariable(k2) ?? fallback;
+builder.Services.AddLogging(x => x.AddConsole());
 
-var mysqlUrl = Env("MYSQL_URL", "");
-var connectionString = !string.IsNullOrEmpty(mysqlUrl)
-    ? $"server={ParseUrl(mysqlUrl, "host")};port={ParseUrl(mysqlUrl, "port")};database={ParseUrl(mysqlUrl, "path").TrimStart('/')};user={ParseUrl(mysqlUrl, "user")};password={ParseUrl(mysqlUrl, "password")};"
-    : builder.Configuration.GetConnectionString("DefaultConnection")
-    ?? $"server={Env2("MYSQLHOST", "MYSQL_HOST", "localhost")};port={Env2("MYSQLPORT", "MYSQL_PORT", "3306")};database={Env2("MYSQLDATABASE", "MYSQL_DATABASE", "store_manager_db")};user={Env2("MYSQLUSER", "MYSQL_USER", "root")};password={Env2("MYSQLPASSWORD", "MYSQL_PASSWORD", "")};";
+builder.Services.AddRazorComponents()
+    .AddInteractiveServerComponents();
+builder.Services.AddDbContext<AppDbContext>(options =>
+    options.UseSqlite(connectionString));
+builder.Services.AddScoped<IInventoryRepository, MySqlInventoryRepository>();
+builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<CustomAuthProvider>();
+builder.Services.AddSingleton<SearchState>();
+builder.Services.AddCascadingAuthenticationState();
 
-static string ParseUrl(string url, string part)
+var app = builder.Build();
+
+try
 {
+    using var scope = app.Services.CreateScope();
+    var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+    dbContext.Database.EnsureCreated();
+
     try
     {
-        var u = new Uri(url);
-        return part switch
-        {
-            "host" => u.Host,
-            "port" => u.Port.ToString(),
-            "path" => u.AbsolutePath,
-            "user" => u.UserInfo.Split(':')[0],
-            "password" => u.UserInfo.Split(':')[1],
-            _ => ""
-        };
+        dbContext.Database.ExecuteSqlRaw("ALTER TABLE inventory_items ADD COLUMN MinLevel INTEGER NOT NULL DEFAULT 5");
+        Console.WriteLine("MinLevel column added.");
     }
-    catch { return ""; }
+    catch { }
+
+    try
+    {
+        dbContext.Database.ExecuteSqlRaw("ALTER TABLE inventory_items ADD COLUMN ImageUrl TEXT NOT NULL DEFAULT ''");
+        Console.WriteLine("ImageUrl column added.");
+    }
+    catch { }
+
+    try
+    {
+        dbContext.Database.ExecuteSqlRaw("UPDATE inventory_items SET MinLevel = 5 WHERE MinLevel = 0 OR MinLevel IS NULL");
+    }
+    catch { }
+
+    try
+    {
+        dbContext.Database.ExecuteSqlRaw(@"
+            CREATE TABLE IF NOT EXISTS sales (
+                Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                SaleDate TEXT NOT NULL,
+                TotalPrice REAL NOT NULL
+            )");
+        Console.WriteLine("Sales table created.");
+    }
+    catch { }
+
+    try
+    {
+        dbContext.Database.ExecuteSqlRaw(@"
+            CREATE TABLE IF NOT EXISTS sale_items (
+                Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                SaleId INTEGER NOT NULL,
+                ProductId INTEGER NOT NULL,
+                ProductName TEXT,
+                Quantity INTEGER NOT NULL,
+                UnitPrice REAL NOT NULL
+            )");
+        Console.WriteLine("SaleItems table created.");
+    }
+    catch { }
+
+    try
+    {
+        dbContext.Database.ExecuteSqlRaw(@"
+            CREATE TABLE IF NOT EXISTS product_logs (
+                Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ProductName TEXT NOT NULL,
+                ProductId INTEGER NOT NULL,
+                Action TEXT NOT NULL,
+                PreviousQty INTEGER NOT NULL,
+                ChangeQty INTEGER NOT NULL,
+                NewQty INTEGER NOT NULL,
+                Date TEXT NOT NULL
+            )");
+        Console.WriteLine("ProductLogs table created.");
+    }
+    catch { }
+
+    var userCount = dbContext.Users.Count();
+    var itemCount = dbContext.InventoryItems.Count();
+    Console.WriteLine($"Database ready. Users: {userCount}, Items: {itemCount}");
 }
+catch (Exception ex)
+{
+    Console.WriteLine($"Database init error: {ex.Message}");
+}
+
+if (!app.Environment.IsDevelopment())
+{
+    app.UseExceptionHandler("/Error", createScopeForErrors: true);
+    app.UseHsts();
+}
+
+app.UseHttpsRedirection();
+app.UseAntiforgery();
+app.MapStaticAssets();
+app.MapRazorComponents<App>()
+    .AddInteractiveServerRenderMode();
+
+app.Run();
 
 builder.Services.AddLogging(x => x.AddConsole());
 
