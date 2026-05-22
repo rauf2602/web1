@@ -18,6 +18,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
         inventory.ToTable("inventory_items");
         inventory.HasKey(x => x.Id);
         inventory.Property(x => x.Name).HasMaxLength(150).IsRequired();
+        inventory.Property(x => x.Price).HasPrecision(18, 2);
+        inventory.Property(x => x.TotalAmount).HasPrecision(18, 2);
         inventory.Property(x => x.MinLevel).HasDefaultValue(5);
         inventory.Property(x => x.ImageUrl).HasMaxLength(500);
 
@@ -32,11 +34,14 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
         var sale = modelBuilder.Entity<Sale>();
         sale.ToTable("sales");
         sale.HasKey(x => x.Id);
+        sale.Property(x => x.SaleDate);
+        sale.Property(x => x.TotalPrice).HasPrecision(18, 2);
 
         var saleItem = modelBuilder.Entity<SaleItem>();
         saleItem.ToTable("sale_items");
         saleItem.HasKey(x => x.Id);
         saleItem.Property(x => x.ProductName).HasMaxLength(150);
+        saleItem.Property(x => x.UnitPrice).HasPrecision(18, 2);
         saleItem.Ignore(x => x.LineTotal);
 
         sale.HasMany(s => s.Items).WithOne().HasForeignKey(si => si.SaleId).OnDelete(DeleteBehavior.Cascade);
