@@ -29,7 +29,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
         user.HasKey(x => x.Id);
         user.Property(x => x.Username).HasMaxLength(100).IsRequired();
         user.Property(x => x.PasswordHash).HasMaxLength(255).IsRequired();
-        user.Property(x => x.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP(6)");
+        user.Property(x => x.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
 
         var sale = modelBuilder.Entity<Sale>();
         sale.ToTable("sales");

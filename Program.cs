@@ -2,47 +2,16 @@ using BlazorApp4.Components;
 using BlazorApp4.Data;
 using BlazorApp4.Services;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging;
 
 var builder = WebApplication.CreateBuilder(args);
 
-static string Env(string key, string fallback) =>
-    Environment.GetEnvironmentVariable(key) ?? fallback;
-
-string BuildCs()
-{
-    var url = Env("MYSQL_URL", Env("MYSQLDATABASE_URL", Env("DATABASE_URL", Env("MYSQL_PRIVATE_URL", ""))));
-    if (!string.IsNullOrEmpty(url) && Uri.TryCreate(url, UriKind.Absolute, out var u))
-        return $"server={u.Host};port={u.Port};database={u.AbsolutePath.TrimStart('/')};user={u.UserInfo.Split(':')[0]};password={u.UserInfo.Split(':')[1]};SslMode=Required;AllowPublicKeyRetrieval=true;CharSet=utf8mb4;";
-
-    var host = Env("MYSQLHOST", Env("MYSQL_HOST", ""));
-    var port = Env("MYSQLPORT", Env("MYSQL_PORT", "3306"));
-    var db = Env("MYSQLDATABASE", Env("MYSQL_DATABASE", ""));
-    var user = Env("MYSQLUSER", Env("MYSQL_USER", ""));
-    var pass = Env("MYSQLPASSWORD", Env("MYSQL_PASSWORD", ""));
-    if (!string.IsNullOrEmpty(host) && !string.IsNullOrEmpty(db))
-        return $"server={host};port={port};database={db};user={user};password={pass};SslMode=Required;AllowPublicKeyRetrieval=true;CharSet=utf8mb4;";
-
-    return builder.Configuration.GetConnectionString("DefaultConnection")
-        ?? "server=localhost;port=3306;database=store_manager_db;user=root;password=;";
-}
-
-Console.WriteLine($"MYSQL_URL exists: {!string.IsNullOrEmpty(Env("MYSQL_URL", ""))}");
-Console.WriteLine($"MYSQLDATABASE exists: {!string.IsNullOrEmpty(Env("MYSQLDATABASE", ""))}");
-Console.WriteLine($"MYSQLHOST exists: {!string.IsNullOrEmpty(Env("MYSQLHOST", ""))}");
-Console.WriteLine($"MYSQLPORT exists: {!string.IsNullOrEmpty(Env("MYSQLPORT", ""))}");
-Console.WriteLine($"MYSQLUSER exists: {!string.IsNullOrEmpty(Env("MYSQLUSER", ""))}");
-Console.WriteLine($"MYSQLPASSWORD exists: {!string.IsNullOrEmpty(Env("MYSQLPASSWORD", ""))}");
-var connectionString = BuildCs();
-Console.WriteLine($"Built connection string: {(connectionString.Length > 50 ? connectionString[..50] + "..." : connectionString)}");
-
-builder.Services.AddLogging(x => x.AddConsole());
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
+    ?? "Data Source=store.db";
 
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 builder.Services.AddDbContextFactory<AppDbContext>(options =>
-    options.UseMySql(connectionString, new MySqlServerVersion(new Version(8, 0, 36)),
-        mysqlOptions => mysqlOptions.EnableRetryOnFailure(maxRetryCount: 5)));
+    options.UseSqlite(connectionString));
 builder.Services.AddScoped<IInventoryRepository, MySqlInventoryRepository>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<CustomAuthProvider>();
@@ -56,112 +25,8 @@ try
     using var scope = app.Services.CreateScope();
     var factory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<AppDbContext>>();
     await using var dbContext = await factory.CreateDbContextAsync();
-
-    var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
-    var hasUrl = !string.IsNullOrEmpty(Env("MYSQL_URL", "")) || !string.IsNullOrEmpty(Env("DATABASE_URL", ""));
-    logger.LogInformation("MySQL env URL found: {HasUrl}, using connection string", hasUrl);
-    var maskedCs = connectionString.Length > 30 ? connectionString.Substring(0, 30) + "..." : connectionString;
-    logger.LogInformation("Connecting to MySQL: {Cs}", maskedCs);
-
     await dbContext.Database.EnsureCreatedAsync();
-
-    try
-    {
-        dbContext.Database.ExecuteSqlRaw(@"
-            CREATE TABLE IF NOT EXISTS inventory_items (
-                Id INT AUTO_INCREMENT PRIMARY KEY,
-                Name VARCHAR(150) NOT NULL,
-                Quantity INT NOT NULL,
-                Price DECIMAL(18,2) NOT NULL,
-                TotalAmount DECIMAL(18,2) NOT NULL,
-                Date DATETIME NOT NULL,
-                MinLevel INT NOT NULL DEFAULT 5,
-                ImageUrl VARCHAR(500) NOT NULL DEFAULT ''
-            )");
-        Console.WriteLine("InventoryItems table ready.");
-    }
-    catch { }
-
-    try
-    {
-        dbContext.Database.ExecuteSqlRaw(@"
-            CREATE TABLE IF NOT EXISTS users (
-                Id INT AUTO_INCREMENT PRIMARY KEY,
-                Username VARCHAR(100) NOT NULL,
-                PasswordHash VARCHAR(255) NOT NULL,
-                CreatedAt DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6)
-            )");
-        Console.WriteLine("Users table ready.");
-    }
-    catch { }
-
-    try
-    {
-        dbContext.Database.ExecuteSqlRaw("ALTER TABLE inventory_items ADD COLUMN MinLevel INT NOT NULL DEFAULT 5");
-        Console.WriteLine("MinLevel column added.");
-    }
-    catch { }
-
-    try
-    {
-        dbContext.Database.ExecuteSqlRaw("ALTER TABLE inventory_items ADD COLUMN ImageUrl VARCHAR(500) NOT NULL DEFAULT ''");
-        Console.WriteLine("ImageUrl column added.");
-    }
-    catch { }
-
-    try
-    {
-        dbContext.Database.ExecuteSqlRaw("UPDATE inventory_items SET MinLevel = 5 WHERE MinLevel = 0 OR MinLevel IS NULL");
-    }
-    catch { }
-
-    try
-    {
-        dbContext.Database.ExecuteSqlRaw(@"
-            CREATE TABLE IF NOT EXISTS sales (
-                Id INT AUTO_INCREMENT PRIMARY KEY,
-                SaleDate DATETIME NOT NULL,
-                TotalPrice DECIMAL(18,2) NOT NULL
-            )");
-        Console.WriteLine("Sales table created.");
-    }
-    catch { }
-
-    try
-    {
-        dbContext.Database.ExecuteSqlRaw(@"
-            CREATE TABLE IF NOT EXISTS sale_items (
-                Id INT AUTO_INCREMENT PRIMARY KEY,
-                SaleId INT NOT NULL,
-                ProductId INT NOT NULL,
-                ProductName VARCHAR(150),
-                Quantity INT NOT NULL,
-                UnitPrice DECIMAL(18,2) NOT NULL
-            )");
-        Console.WriteLine("SaleItems table created.");
-    }
-    catch { }
-
-    try
-    {
-        dbContext.Database.ExecuteSqlRaw(@"
-            CREATE TABLE IF NOT EXISTS product_logs (
-                Id INT AUTO_INCREMENT PRIMARY KEY,
-                ProductName VARCHAR(150) NOT NULL,
-                ProductId INT NOT NULL,
-                Action VARCHAR(20) NOT NULL,
-                PreviousQty INT NOT NULL,
-                ChangeQty INT NOT NULL,
-                NewQty INT NOT NULL,
-                Date DATETIME NOT NULL
-            )");
-        Console.WriteLine("ProductLogs table created.");
-    }
-    catch { }
-
-    var userCount = dbContext.Users.Count();
-    var itemCount = dbContext.InventoryItems.Count();
-    Console.WriteLine($"Database ready. Users: {userCount}, Items: {itemCount}");
+    Console.WriteLine("Database ready.");
 }
 catch (Exception ex)
 {
@@ -181,4 +46,3 @@ app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 
 app.Run();
-

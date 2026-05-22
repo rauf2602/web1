@@ -365,8 +365,8 @@ C:\Users\user\source\repos\BlazorApp4\BlazorApp4\obj\Debug\net9.0\scopedcss\Comp
 C:\Users\user\source\repos\BlazorApp4\BlazorApp4\obj\Debug\net9.0\compressed\ixc29xn24h-{0}-ukzv7llqri-ukzv7llqri.gz
 C:\Users\user\source\repos\BlazorApp4\BlazorApp4\obj\Debug\net9.0\compressed\p98sfw3qwj-{0}-kwdsmj2put-kwdsmj2put.gz
 C:\Users\user\source\repos\BlazorApp4\BlazorApp4\obj\Debug\net9.0\compressed\67lw0hwvar-{0}-kwdsmj2put-kwdsmj2put.gz
-C:\Users\user\source\repos\BlazorApp4\BlazorApp4\obj\Debug\net9.0\staticwebassets.upToDateCheck.txt
 C:\Users\user\source\repos\BlazorApp4\BlazorApp4\bin\Debug\net9.0\railway.json
 C:\Users\user\source\repos\BlazorApp4\BlazorApp4\obj\Debug\net9.0\BlazorApp4.sourcelink.json
 C:\Users\user\source\repos\BlazorApp4\BlazorApp4\bin\Debug\net9.0\MySqlConnector.dll
 C:\Users\user\source\repos\BlazorApp4\BlazorApp4\bin\Debug\net9.0\Pomelo.EntityFrameworkCore.MySql.dll
+C:\Users\user\source\repos\BlazorApp4\BlazorApp4\obj\Debug\net9.0\staticwebassets.upToDateCheck.txt
