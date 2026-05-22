@@ -1,0 +1,159 @@
+@page "/register"
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+@using BlazorApp4.Services
+@using Microsoft.AspNetCore.Components.Authorization
+@inject ILogger<Register> Logger
+
+<h2 class="text-center mt-4">Register</h2>
+
+<div class="container mt-5 auth-container">
+    <div class="auth-card">
+        <div class="mb-4">
+            <label class="form-label">Username</label>
+            <input type="text" class="form-control" @bind="username" placeholder="Choose a username" />
+        </div>
+        <div class="mb-4">
+            <label class="form-label">Password</label>
+            <input type="password" class="form-control" @bind="password" placeholder="Choose a password" />
+        </div>
+        <div class="mb-4">
+            <label class="form-label">Confirm Password</label>
+            <input type="password" class="form-control" @bind="confirmPassword" placeholder="Confirm your password" />
+        </div>
+
+        @if (!string.IsNullOrEmpty(errorMessage))
+        {
+            <div class="alert alert-danger mb-4">@errorMessage</div>
+        }
+
+        @if (!string.IsNullOrEmpty(successMessage))
+        {
+            <div class="alert alert-success mb-4">@successMessage</div>
+        }
+
+        <div class="d-flex gap-3">
+            <button class="btn btn-success flex-grow-1" @onclick="HandleRegister" disabled="@isLoading">
+                @(isLoading ? "Loading..." : "Register")
+            </button>
+            <button class="btn btn-outline-secondary flex-grow-1" @onclick="GoToLogin">Login</button>
+        </div>
+    </div>
+</div>
+
+<style>
+    .auth-container { max-width: 420px; }
+    .auth-card {
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.82), rgba(255, 255, 255, 0.72));
+        border: 1px solid rgba(148, 163, 184, 0.14);
+        border-radius: 28px;
+        padding: 32px 28px;
+        box-shadow: 0 24px 60px rgba(15, 23, 42, 0.14);
+        backdrop-filter: blur(14px);
+    }
+    h2 { font-weight: bold; color: #1e293b; letter-spacing: 0.04em; }
+    .form-control {
+        background: rgba(255, 255, 255, 0.95); color: #1e293b;
+        border: 1px solid rgba(148, 163, 184, 0.22); border-radius: 14px;
+    }
+    .form-control:focus {
+        background: #ffffff; color: #0f172a; border-color: #38bdf8;
+        box-shadow: 0 0 0 0.18rem rgba(56, 189, 248, 0.15);
+    }
+    .form-label { color: #475569; font-weight: 500; }
+    .btn { border-radius: 14px; font-weight: 600; padding: 12px 20px; }
+    .btn-success { background: linear-gradient(135deg, #22c55e, #15803d); border: none; }
+    .btn-success:hover { background: linear-gradient(135deg, #16a34a, #166534); }
+    html.dm h2 { color: #e2e8f0; }
+    html.dm .auth-card {
+        background: linear-gradient(180deg, rgba(15, 23, 42, 0.88), rgba(15, 23, 42, 0.78));
+        border-color: rgba(148, 163, 184, 0.2);
+    }
+    html.dm .form-control {
+        background: rgba(15, 23, 42, 0.9); color: #e5eefb;
+        border-color: rgba(148, 163, 184, 0.22);
+    }
+    html.dm .form-control:focus { background: rgba(15, 23, 42, 0.98); color: #f8fafc; }
+    html.dm .form-label { color: #cbd5e1; }
+</style>
+
+@code {
+    private string username = "";
+    private string password = "";
+    private string confirmPassword = "";
+    private string errorMessage = "";
+    private string successMessage = "";
+    private bool isLoading = false;
+
+    [Inject]
+    private IAuthService AuthService { get; set; } = null!;
+
+    [Inject]
+    private NavigationManager Nav { get; set; } = null!;
+
+    [Inject]
+    private CustomAuthProvider AuthState { get; set; } = null!;
+
+    private async Task HandleRegister()
+    {
+        errorMessage = "";
+        successMessage = "";
+        isLoading = true;
+
+        try
+        {
+            if (string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(password))
+            {
+                errorMessage = "Please fill in all fields.";
+                isLoading = false;
+                return;
+            }
+
+            if (password != confirmPassword)
+            {
+                errorMessage = "Passwords do not match.";
+                isLoading = false;
+                return;
+            }
+
+            if (password.Length < 4)
+            {
+                errorMessage = "Password must be at least 4 characters long.";
+                isLoading = false;
+                return;
+            }
+
+            Logger.LogInformation("Register attempt for user: {Username}", username);
+
+            var result = await AuthService.RegisterAsync(username, password);
+            if (!result)
+            {
+                errorMessage = "This username is already taken.";
+                isLoading = false;
+                return;
+            }
+
+            Logger.LogInformation("Registration successful for user: {Username}", username);
+            successMessage = "Registration successful! Redirecting...";
+
+            var user = await AuthService.LoginAsync(username, password);
+            if (user is not null)
+            {
+                await AuthState.SetAuthAsync(user);
+            }
+
+            isLoading = false;
+            Nav.NavigateTo("/");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error during registration for user: {Username}", username);
+            errorMessage = $"Error: {ex.Message}";
+            isLoading = false;
+        }
+    }
+
+    private void GoToLogin()
+    {
+        Nav.NavigateTo("/login");
+    }
+}

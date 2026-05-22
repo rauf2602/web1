@@ -1,0 +1,250 @@
+@page "/login"
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+@using BlazorApp4.Services
+
+<div class="login-page">
+    <div class="login-box">
+        <div class="login-header">
+            <h2>🏪 Store Manager</h2>
+            <p>Sign in to your account</p>
+        </div>
+
+        @if (!string.IsNullOrEmpty(errorMessage))
+        {
+            <div class="error-msg">@errorMessage</div>
+        }
+
+        <div class="login-form">
+            <input type="text" class="input-field" @bind="username" @bind:after="ClearError" placeholder="Username" @onkeydown="HandleEnter" />
+            <input type="password" class="input-field" @bind="password" @bind:after="ClearError" placeholder="Password" @onkeydown="HandleEnter" />
+            <button class="btn-login" @onclick="HandleLogin" disabled="@(isLoggingIn)">
+                @(isLoggingIn ? "Signing in..." : "Sign In")
+            </button>
+        </div>
+
+        <div class="login-footer">
+            <span>No account?</span>
+            <button class="link-register" @onclick="GoToRegister">Register</button>
+        </div>
+    </div>
+</div>
+
+<style>
+    .login-page {
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: transparent;
+        font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    }
+
+    .login-box {
+        width: 440px;
+        background: #ffffff;
+        border-radius: 20px;
+        padding: 44px 36px;
+        border: 1px solid #e2e8f0;
+        box-shadow: 0 12px 40px rgba(0,0,0,.1);
+        animation: showUp .4s ease;
+    }
+
+    @@keyframes showUp {
+        from { opacity: 0; transform: scale(.96); }
+        to { opacity: 1; transform: scale(1); }
+    }
+
+    .login-header {
+        text-align: center;
+        margin-bottom: 32px;
+    }
+
+    .login-header h2 {
+        font-size: 1.7rem;
+        font-weight: 700;
+        color: #0f172a;
+        margin: 0 0 8px;
+    }
+
+    .login-header p {
+        font-size: 1rem;
+        color: #64748b;
+        margin: 0;
+    }
+
+    .error-msg {
+        background: rgba(239,68,68,.08);
+        border: 1px solid rgba(239,68,68,.2);
+        color: #dc2626;
+        font-size: .85rem;
+        padding: 10px 14px;
+        border-radius: 10px;
+        margin-bottom: 20px;
+    }
+
+    .login-form {
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+        margin-bottom: 24px;
+    }
+
+    .input-field {
+        width: 100%;
+        padding: 16px 20px;
+        border: 2px solid #e2e8f0;
+        border-radius: 14px;
+        background: #f8fafc;
+        color: #0f172a;
+        font-size: 1.1rem;
+        outline: none;
+        transition: border-color .2s;
+    }
+
+    .input-field::placeholder { color: #475569; }
+
+    .input-field:focus {
+        border-color: #6366f1;
+        box-shadow: 0 0 0 3px rgba(99,102,241,.15);
+    }
+
+    .btn-login {
+        width: 100%;
+        padding: 17px;
+        border: none;
+        border-radius: 14px;
+        background: #6366f1;
+        color: white;
+        font-size: 1.1rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background .2s;
+    }
+
+    .btn-login:hover:not(:disabled) { background: #4f46e5; }
+    .btn-login:disabled { opacity: .6; cursor: not-allowed; }
+
+    .login-footer {
+        text-align: center;
+        font-size: .85rem;
+        color: #64748b;
+    }
+
+    .link-register {
+        background: none;
+        border: none;
+        color: #818cf8;
+        font-weight: 600;
+        cursor: pointer;
+        font-size: .85rem;
+        margin-left: 4px;
+    }
+
+    .link-register:hover { color: #a78bfa; }
+
+    html.dm .login-box {
+        background: #1e293b;
+        border-color: #334155;
+        box-shadow: 0 12px 40px rgba(0,0,0,.3);
+    }
+
+    html.dm .login-header h2 { color: #f1f5f9; }
+    html.dm .login-header p { color: #94a3b8; }
+
+    html.dm .error-msg {
+        background: rgba(239,68,68,.12);
+        border-color: rgba(239,68,68,.25);
+        color: #fca5a5;
+    }
+
+    html.dm .input-field {
+        background: #0f172a;
+        border-color: #334155;
+        color: #f1f5f9;
+    }
+
+    html.dm .input-field::placeholder { color: #475569; }
+
+    html.dm .input-field:focus {
+        border-color: #6366f1;
+        box-shadow: 0 0 0 3px rgba(99,102,241,.2);
+    }
+
+    html.dm .login-footer { color: #64748b; }
+
+    @@media (max-width: 420px) {
+        .login-box { width: calc(100% - 32px); margin: 0 16px; }
+    }
+</style>
+
+@code {
+    private string username = "";
+    private string password = "";
+    private string errorMessage = "";
+    private bool isLoggingIn = false;
+
+    [Inject]
+    private IAuthService AuthService { get; set; } = null!;
+
+    [Inject]
+    private NavigationManager Nav { get; set; } = null!;
+
+    [Inject]
+    private CustomAuthProvider AuthState { get; set; } = null!;
+
+    private void ClearError()
+    {
+        if (!string.IsNullOrEmpty(errorMessage))
+        {
+            errorMessage = "";
+        }
+    }
+
+    private async Task HandleEnter(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await HandleLogin();
+        }
+    }
+
+    private async Task HandleLogin()
+    {
+        errorMessage = "";
+        if (string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(password))
+        {
+            errorMessage = "Please fill in all fields.";
+            return;
+        }
+
+        isLoggingIn = true;
+        StateHasChanged();
+
+        try
+        {
+            var user = await AuthService.LoginAsync(username, password);
+            if (user is null)
+            {
+                errorMessage = "Invalid username or password.";
+                return;
+            }
+
+            await AuthState.SetAuthAsync(user);
+            Nav.NavigateTo("/");
+        }
+        catch
+        {
+            errorMessage = "An error occurred. Please try again.";
+        }
+        finally
+        {
+            isLoggingIn = false;
+            StateHasChanged();
+        }
+    }
+
+    private void GoToRegister()
+    {
+        Nav.NavigateTo("/register");
+    }
+}

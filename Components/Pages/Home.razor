@@ -1,0 +1,1184 @@
+@page "/"
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+@using BlazorApp4.Models
+@using BlazorApp4.Services
+@using BlazorApp4.Data
+@using Microsoft.EntityFrameworkCore
+@inject CustomAuthProvider AuthState
+@inject NavigationManager Nav
+@inject AppDbContext DbContext
+
+<h2 class="text-center mt-4">Store Manager</h2>
+
+<div class="container mt-5 manager-shell">
+    @if (RestockSuggestions.Any())
+    {
+        <div class="restock-alert">
+            <h5>⚠️ Restock Suggestions</h5>
+            @foreach (var suggestion in RestockSuggestions)
+            {
+                <div class="restock-item">
+                    <span class="restock-text">👉 Need to restock <b>@suggestion.Name</b> — <b>@suggestion.Needed</b> more needed</span>
+                    <span class="restock-badge">Current: @suggestion.Quantity / Min: @suggestion.MinLevel</span>
+                </div>
+            }
+        </div>
+    }
+
+    <div class="search-row mb-4">
+        <input type="text" class="form-control search-box" @bind="searchText" @bind:after="OnSearchChanged" placeholder="🔍 Search by product name or ID..." />
+    </div>
+
+    <div class="text-center mb-4 action-bar">
+        <button class="btn btn-success me-3 animated-btn glow-green" @onclick="OpenAddInModal">
+            Add Item
+        </button>
+
+        <button class="btn btn-danger me-3 animated-btn glow-red" @onclick="OpenDeleteModal">
+            Delete Item
+        </button>
+
+        <button class="btn btn-dark animated-btn glow-slate" @onclick="PrintAllQRCodes" disabled="@(logs.Count == 0)">
+            Print QR
+        </button>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(pageError))
+    {
+        <div class="alert alert-danger mb-4">@pageError</div>
+    }
+
+    <table class="table text-center align-middle inventory-table">
+        <thead>
+            <tr>
+                <th>#</th>
+                <th>Product</th>
+                <th>Quantity</th>
+                <th>Price</th>
+                <th>Total</th>
+                <th>Status</th>
+                <th>Date</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+
+        <tbody>
+            @if (isLoading)
+            {
+                <tr>
+                    <td colspan="8">Loading...</td>
+                </tr>
+            }
+            else if (!FilteredLogs.Any())
+            {
+                <tr>
+                    <td colspan="8">No results found</td>
+                </tr>
+            }
+            else
+            {
+                @foreach (var item in FilteredLogs)
+                {
+                    var isLow = item.Quantity < item.MinLevel;
+                    <tr class="@(isLow ? "low-stock-row" : "")">
+                        <td>@item.Id</td>
+                        <td>@item.Name</td>
+                        <td class="@(isLow ? "low-stock" : "")">@item.Quantity</td>
+                        <td>@item.Price.ToString("N0") UZS</td>
+                        <td>@item.TotalAmount.ToString("N0") UZS</td>
+                        <td>
+                            @if (isLow)
+                            {
+                                <span class="badge bg-warning text-dark">⚠️ Low</span>
+                            }
+                            else
+                            {
+                                <span class="badge bg-success">OK</span>
+                            }
+                        </td>
+                        <td>@item.Date.ToString("dd.MM HH:mm")</td>
+                        <td>
+                            <div class="action-buttons">
+                                <button class="btn btn-info btn-sm text-white animated-btn glow-cyan" @onclick="() => OpenQrModal(item.Id)">
+                                    QR
+                                </button>
+                                <button class="btn btn-warning btn-sm animated-btn glow-amber" @onclick="() => OpenEditModal(item.Id)">
+                                    Edit
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                }
+            }
+        </tbody>
+    </table>
+</div>
+
+@if (showProductModal)
+{
+    <div class="modal fade show d-block modal-overlay" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">@modalTitle</h5>
+                    <button type="button" class="btn-close" @onclick="CloseProductModal"></button>
+                </div>
+                <div class="modal-body">
+                    @if (isDeleteMode)
+                    {
+                        <div class="mb-3">
+                            <label class="form-label">ID to delete</label>
+                            <input type="number" class="form-control" @bind="deleteId" min="1" />
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="mb-3">
+                            <label class="form-label">Product name</label>
+                            <input type="text" class="form-control" @bind="newProductName" placeholder="Example: Apple" />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Quantity</label>
+                            <input type="number" class="form-control" @bind="newQuantity" min="1" />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Price (UZS)</label>
+                            <input type="number" class="form-control" @bind="newPrice" min="0" />
+                        </div>
+                    }
+
+                    @if (!string.IsNullOrEmpty(errorMessage))
+                    {
+                        <div class="alert alert-danger">@errorMessage</div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CloseProductModal">Cancel</button>
+                    <button type="button" class="btn btn-primary" @onclick="SubmitModal">
+                        @submitButtonText
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (showQrModal && selectedQrItem is not null)
+{
+    <div class="modal fade show d-block modal-overlay" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Product QR Code</h5>
+                    <button type="button" class="btn-close" @onclick="CloseQrModal"></button>
+                </div>
+                <div class="modal-body text-center">
+                    <div class="qr-preview-card">
+                        <img src="@GetQrCodeUrl(selectedQrItem)" alt="QR Code" class="img-fluid qr-image mb-3" />
+                        <h5 class="mb-2">@selectedQrItem.Name</h5>
+                        <p class="mb-1">ID: @selectedQrItem.Id</p>
+                        <p class="mb-1">Quantity: @selectedQrItem.Quantity</p>
+                        <p class="mb-0">Price: @selectedQrItem.Price.ToString("N0") UZS</p>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CloseQrModal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<div id="printableQrArea" class="print-area">
+    <div class="print-header">
+        <h3>Product QR Codes</h3>
+        <p>Date: @DateTime.Now.ToString("dd.MM.yyyy HH:mm")</p>
+    </div>
+    <div class="qr-grid">
+        @foreach (var item in logs)
+        {
+            <div class="qr-print-card">
+                <img src="@GetQrCodeUrl(item)" alt="QR Code" class="qr-image" />
+                <h5>@item.Name</h5>
+                <p>ID: @item.Id</p>
+                <p>Quantity: @item.Quantity</p>
+                <p>Price: @item.Price.ToString("N0") UZS</p>
+            </div>
+        }
+    </div>
+</div>
+
+<!-- Product History Panel -->
+<div class="container mt-4 history-shell">
+    <div class="history-header">
+        <h3>📦 Product History</h3>
+        <div class="history-filters">
+            <input type="text" class="history-search" @bind="historySearch" @bind:after="LoadHistory" placeholder="🔍 Product name..." />
+            <select class="history-filter" @bind="historyActionFilter" @bind:after="LoadHistory">
+                <option value="">All</option>
+                <option value="Incoming">📥 Incoming</option>
+                <option value="Sold">📤 Sold</option>
+                <option value="Outgoing">🚚 Outgoing</option>
+                <option value="Change">🔄 Change</option>
+            </select>
+        </div>
+    </div>
+
+    <div class="history-table-wrapper">
+        <table class="history-table">
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Product</th>
+                    <th>Action</th>
+                    <th>Previous</th>
+                    <th>Change</th>
+                    <th>New</th>
+                </tr>
+            </thead>
+            <tbody>
+                @if (!historyLogs.Any())
+                {
+                    <tr>
+                        <td colspan="6" class="text-center text-muted py-4">No history found</td>
+                    </tr>
+                }
+                else
+                {
+                    @foreach (var log in historyLogs)
+                    {
+                        <tr>
+                            <td>@log.Date.ToString("dd.MM HH:mm")</td>
+                            <td><strong>@log.ProductName</strong></td>
+                            <td>
+                                <span class="action-badge action-@GetActionClass(log.Action)">
+                                    @GetActionLabel(log.Action)
+                                </span>
+                            </td>
+                            <td>@log.PreviousQty</td>
+                            <td class="@(IsOutgoingAction(log.Action) ? "text-danger" : "text-success")">
+                                @(IsOutgoingAction(log.Action) ? "-" : "+")@log.ChangeQty
+                            </td>
+                            <td><strong>@log.NewQty</strong></td>
+                        </tr>
+                    }
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<style>
+    h2 {
+        font-weight: bold;
+        color: #1e293b;
+        letter-spacing: 0.04em;
+        animation: titleRise 0.8s ease;
+        transition: color 0.25s ease;
+    }
+
+    .search-row {
+        max-width: 480px;
+        margin: 0 auto;
+    }
+
+    .search-box {
+        background: rgba(255, 255, 255, 0.8);
+        border: 1px solid rgba(148, 163, 184, 0.2);
+        border-radius: 999px;
+        padding: 12px 24px;
+        font-size: 0.95rem;
+        transition: all 0.2s ease;
+    }
+
+    .search-box:focus {
+        background: #ffffff;
+        border-color: #38bdf8;
+        box-shadow: 0 0 0 0.18rem rgba(56, 189, 248, 0.15);
+    }
+
+    .restock-alert {
+        background: linear-gradient(135deg, #fff3cd, #ffeaa7);
+        border: 1px solid #f59e0b;
+        border-radius: 16px;
+        padding: 16px 20px;
+        margin-bottom: 20px;
+    }
+
+    .restock-alert h5 {
+        margin: 0 0 12px;
+        color: #92400e;
+        font-weight: 700;
+    }
+
+    .restock-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 8px 12px;
+        background: rgba(255, 255, 255, 0.6);
+        border-radius: 10px;
+        margin-bottom: 6px;
+    }
+
+    .restock-text {
+        color: #92400e;
+        font-size: 0.95rem;
+    }
+
+    .restock-badge {
+        background: #f59e0b;
+        color: white;
+        padding: 4px 12px;
+        border-radius: 999px;
+        font-size: 0.85rem;
+        font-weight: 600;
+    }
+
+    html.dm .restock-alert {
+        background: linear-gradient(135deg, #451a03, #92400e);
+        border-color: #f59e0b;
+    }
+
+    html.dm .restock-item {
+        background: rgba(15, 23, 42, 0.6);
+    }
+
+    html.dm .restock-text {
+        color: #fbbf24;
+    }
+
+    .low-stock-row {
+        background: rgba(255, 243, 205, 0.5) !important;
+    }
+
+    .low-stock {
+        color: #dc2626;
+        font-weight: 700;
+    }
+
+    html.dm .search-box {
+        background: rgba(30, 41, 59, 0.8);
+        color: #e2e8f0;
+        border-color: rgba(148, 163, 184, 0.2);
+    }
+
+    html.dm .search-box:focus {
+        background: rgba(15, 23, 42, 0.9);
+        color: #f8fafc;
+    }
+
+    html.dm .restock-alert {
+        background: linear-gradient(135deg, #451a03, #92400e);
+        border-color: #f59e0b;
+    }
+
+    html.dm .restock-item {
+        background: rgba(15, 23, 42, 0.6);
+    }
+
+    html.dm .restock-text {
+        color: #fbbf24;
+    }
+
+    html.dm .low-stock-row {
+        background: rgba(120, 53, 15, 0.3) !important;
+    }
+
+    html.dm .low-stock {
+        color: #fbbf24;
+    }
+
+    .manager-shell {
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.82), rgba(255, 255, 255, 0.72));
+        border: 1px solid rgba(148, 163, 184, 0.14);
+        border-radius: 28px;
+        padding: 30px 24px;
+        box-shadow: 0 24px 60px rgba(15, 23, 42, 0.14);
+        backdrop-filter: blur(14px);
+        transition: background 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
+    }
+
+    .action-bar .btn {
+        width: 130px;
+    }
+
+    .btn-sm {
+        width: auto;
+        min-width: 78px;
+    }
+
+    .animated-btn {
+        border: 0;
+        border-radius: 14px;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+        transition:
+            transform 0.2s ease,
+            box-shadow 0.2s ease,
+            filter 0.2s ease,
+            background-color 0.2s ease;
+        animation: buttonFloat 0.55s ease both;
+    }
+
+    .animated-btn:hover {
+        transform: translateY(-3px) scale(1.02);
+        filter: brightness(1.06);
+    }
+
+    .animated-btn:active {
+        transform: translateY(0) scale(0.98);
+    }
+
+    .animated-btn:disabled {
+        opacity: 0.45;
+        transform: none;
+        box-shadow: none;
+    }
+
+    .glow-green {
+        box-shadow: 0 14px 28px rgba(34, 197, 94, 0.28);
+    }
+
+    .glow-red {
+        box-shadow: 0 14px 28px rgba(239, 68, 68, 0.28);
+    }
+
+    .glow-slate {
+        box-shadow: 0 14px 28px rgba(71, 85, 105, 0.32);
+    }
+
+    .glow-cyan {
+        box-shadow: 0 10px 22px rgba(6, 182, 212, 0.3);
+    }
+
+    .glow-amber {
+        box-shadow: 0 10px 22px rgba(245, 158, 11, 0.3);
+    }
+
+    .action-buttons {
+        display: flex;
+        gap: 8px;
+        justify-content: center;
+        flex-wrap: wrap;
+    }
+
+    .inventory-table {
+        border-collapse: separate;
+        border-spacing: 0;
+        overflow: hidden;
+        border-radius: 22px;
+        box-shadow: 0 18px 44px rgba(15, 23, 42, 0.12);
+        background: rgba(255, 255, 255, 0.8);
+        transition: background 0.25s ease, box-shadow 0.25s ease;
+    }
+
+    .inventory-table thead th {
+        background: linear-gradient(135deg, #dbeafe, #bfdbfe);
+        color: #0f172a;
+        border-bottom: 1px solid rgba(148, 163, 184, 0.18);
+        padding: 16px 12px;
+        transition: background 0.25s ease, color 0.25s ease;
+    }
+
+    .inventory-table tbody td {
+        background: rgba(255, 255, 255, 0.92);
+        color: #334155;
+        border-color: rgba(148, 163, 184, 0.12);
+        padding: 14px 12px;
+        transition: background 0.25s ease, color 0.25s ease;
+    }
+
+    .inventory-table tbody tr:hover td {
+        background: rgba(241, 245, 249, 0.95);
+    }
+
+    .badge.bg-success {
+        background: linear-gradient(135deg, #22c55e, #15803d) !important;
+        box-shadow: 0 10px 20px rgba(34, 197, 94, 0.22);
+    }
+
+    .qr-image {
+        width: 160px;
+        height: 160px;
+        object-fit: contain;
+    }
+
+    .qr-preview-card {
+        border: 1px solid rgba(148, 163, 184, 0.18);
+        border-radius: 16px;
+        padding: 20px;
+        background: linear-gradient(180deg, #ffffff, #f8fafc);
+        color: #1e293b;
+        transition: background 0.25s ease, color 0.25s ease;
+    }
+
+    .print-area {
+        display: none;
+    }
+
+    .modal-overlay {
+        background: rgba(2, 6, 23, 0.72);
+        backdrop-filter: blur(8px);
+    }
+
+    .modal-content {
+        background: linear-gradient(180deg, #ffffff, #f8fafc);
+        color: #1e293b;
+        border: 1px solid rgba(148, 163, 184, 0.16);
+        border-radius: 24px;
+        box-shadow: 0 24px 60px rgba(15, 23, 42, 0.22);
+        transition: background 0.25s ease, color 0.25s ease, border-color 0.25s ease;
+    }
+
+    .modal-header,
+    .modal-footer {
+        border-color: rgba(148, 163, 184, 0.12);
+    }
+
+    .form-control {
+        background: rgba(255, 255, 255, 0.95);
+        color: #1e293b;
+        border: 1px solid rgba(148, 163, 184, 0.22);
+        border-radius: 14px;
+        transition: background 0.25s ease, color 0.25s ease, border-color 0.25s ease;
+    }
+
+    .form-control::placeholder {
+        color: #94a3b8;
+    }
+
+    .form-control:focus {
+        background: #ffffff;
+        color: #0f172a;
+        border-color: #38bdf8;
+        box-shadow: 0 0 0 0.18rem rgba(56, 189, 248, 0.15);
+    }
+
+    .form-label {
+        color: #475569;
+        transition: color 0.25s ease;
+    }
+
+    html.dm h2 {
+        color: #e2e8f0;
+    }
+
+    html.dm .manager-shell {
+        background: linear-gradient(180deg, rgba(15, 23, 42, 0.88), rgba(15, 23, 42, 0.78));
+        border-color: rgba(148, 163, 184, 0.2);
+        box-shadow: 0 24px 60px rgba(2, 8, 23, 0.45);
+    }
+
+    html.dm .inventory-table {
+        background: rgba(15, 23, 42, 0.68);
+        box-shadow: 0 18px 44px rgba(2, 8, 23, 0.35);
+    }
+
+    html.dm .inventory-table thead th {
+        background: linear-gradient(135deg, #1e293b, #0f172a);
+        color: #dbeafe;
+    }
+
+    html.dm .inventory-table tbody td {
+        background: rgba(15, 23, 42, 0.9);
+        color: #dbe4f0;
+    }
+
+    html.dm .inventory-table tbody tr:hover td {
+        background: rgba(30, 41, 59, 0.96);
+    }
+
+    html.dm .qr-preview-card {
+        background: linear-gradient(180deg, #111827, #0f172a);
+        color: #e2e8f0;
+    }
+
+    html.dm .modal-content {
+        background: linear-gradient(180deg, #111827, #0f172a);
+        color: #e5eefb;
+        border-color: rgba(148, 163, 184, 0.16);
+        box-shadow: 0 24px 60px rgba(2, 8, 23, 0.45);
+    }
+
+    html.dm .form-control {
+        background: rgba(15, 23, 42, 0.9);
+        color: #e5eefb;
+        border-color: rgba(148, 163, 184, 0.22);
+    }
+
+    html.dm .form-control:focus {
+        background: rgba(15, 23, 42, 0.98);
+        color: #f8fafc;
+    }
+
+    html.dm .form-label {
+        color: #cbd5e1;
+    }
+
+    .print-header {
+        text-align: center;
+        margin-bottom: 24px;
+    }
+
+    .qr-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 18px;
+    }
+
+    .qr-print-card {
+        border: 1px solid #d1d5db;
+        border-radius: 12px;
+        padding: 16px;
+        text-align: center;
+        page-break-inside: avoid;
+    }
+
+    .qr-print-card p,
+    .qr-preview-card p {
+        margin-bottom: 6px;
+    }
+
+    @@keyframes buttonFloat {
+        from {
+            opacity: 0;
+            transform: translateY(10px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    @@keyframes titleRise {
+        from {
+            opacity: 0;
+            transform: translateY(-10px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    @@media (max-width: 768px) {
+        .manager-shell {
+            padding: 22px 14px;
+            border-radius: 20px;
+        }
+
+        .action-bar {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .action-bar .btn {
+            width: 100%;
+            margin-right: 0 !important;
+        }
+    }
+
+    /* History Panel */
+    .history-shell {
+        max-width: 1200px;
+        background: var(--card, #fff);
+        border-radius: 16px;
+        padding: 24px;
+        box-shadow: 0 8px 30px rgba(0,0,0,.08);
+        margin-bottom: 32px;
+    }
+
+    .history-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 16px;
+        flex-wrap: wrap;
+        gap: 12px;
+    }
+
+    .history-header h3 {
+        font-size: 1.25rem;
+        font-weight: 700;
+        color: var(--text, #0f172a);
+        margin: 0;
+    }
+
+    .history-filters {
+        display: flex;
+        gap: 8px;
+    }
+
+    .history-search {
+        padding: 8px 12px;
+        border: 1px solid var(--border, #e2e8f0);
+        border-radius: 8px;
+        font-size: 0.85rem;
+    }
+
+    .history-filter {
+        padding: 8px 12px;
+        border: 1px solid var(--border, #e2e8f0);
+        border-radius: 8px;
+        font-size: 0.85rem;
+        background: var(--card, #fff);
+        color: var(--text, #0f172a);
+    }
+
+    .history-table-wrapper {
+        border-radius: 12px;
+        overflow: hidden;
+        border: 1px solid var(--border, #e2e8f0);
+    }
+
+    .history-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.9rem;
+    }
+
+    .history-table thead th {
+        background: var(--surface-hover, #f1f5f9);
+        padding: 12px;
+        text-align: left;
+        font-weight: 600;
+        color: var(--text-secondary, #475569);
+        border-bottom: 2px solid var(--border, #e2e8f0);
+    }
+
+    .history-table tbody td {
+        padding: 10px 12px;
+        border-bottom: 1px solid var(--border, #e2e8f0);
+        color: var(--text, #0f172a);
+    }
+
+    .history-table tbody tr:hover {
+        background: var(--surface-hover, #f8fafc);
+    }
+
+    .action-badge {
+        display: inline-block;
+        padding: 4px 10px;
+        border-radius: 6px;
+        font-size: 0.75rem;
+        font-weight: 700;
+    }
+
+    .action-incoming { background: #dcfce7; color: #166534; }
+    .action-sold { background: #fee2e2; color: #991b1b; }
+    .action-outgoing { background: #fef3c7; color: #92400e; }
+    .action-change { background: #dbeafe; color: #1e40af; }
+
+    html.dm .history-shell {
+        background: #1e293b;
+    }
+    html.dm .history-search,
+    html.dm .history-filter {
+        background: #334155;
+        border-color: #475569;
+        color: #e2e8f0;
+    }
+    html.dm .history-table thead th {
+        background: #334155;
+        color: #cbd5e1;
+    }
+    html.dm .history-table tbody td {
+        border-color: #475569;
+        color: #e2e8f0;
+    }
+    html.dm .history-table tbody tr:hover {
+        background: #334155;
+    }
+</style>
+
+@code {
+    private List<InventoryItem> logs = new();
+    private string searchText = "";
+    private string modalTitle = "";
+    private string submitButtonText = "Save";
+    private string newProductName = "";
+    private int newQuantity = 1;
+    private decimal newPrice;
+    private int deleteId = 1;
+    private int editId;
+    private bool isDeleteMode;
+    private bool isEditMode;
+    private bool showProductModal;
+    private bool showQrModal;
+    private bool isLoading = true;
+    private string errorMessage = "";
+    private string pageError = "";
+    private InventoryItem? selectedQrItem;
+    private List<ProductLog> historyLogs = new();
+    private string historySearch = "";
+    private string historyActionFilter = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!AuthState.IsAuthenticated)
+        {
+            Nav.NavigateTo("/login");
+            return;
+        }
+        await LoadDataAsync();
+        await LoadHistory();
+    }
+
+    private void OnSearchChanged()
+    {
+        StateHasChanged();
+    }
+
+    private IEnumerable<InventoryItem> FilteredLogs
+    {
+        get
+        {
+            if (string.IsNullOrWhiteSpace(searchText))
+                return logs;
+
+            var query = searchText.Trim().ToLower();
+            return logs.Where(x => x.Name.ToLower().Contains(query)
+                || x.Id.ToString().Contains(query));
+        }
+    }
+
+    private IEnumerable<(string Name, int Quantity, int MinLevel, int Needed)> RestockSuggestions
+    {
+        get
+        {
+            return logs
+                .Where(x => x.Quantity < x.MinLevel)
+                .Select(x => (Name: x.Name, Quantity: x.Quantity, MinLevel: x.MinLevel, Needed: x.MinLevel - x.Quantity))
+                .OrderByDescending(x => x.Needed);
+        }
+    }
+
+    private async Task LoadDataAsync()
+    {
+        try
+        {
+            isLoading = true;
+            pageError = "";
+            logs = await Repository.GetAllAsync();
+        }
+        catch (Exception ex)
+        {
+            pageError = $"Database error: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task LoadHistory()
+    {
+        try
+        {
+            var query = DbContext.ProductLogs.OrderByDescending(x => x.Date).AsQueryable();
+            if (!string.IsNullOrWhiteSpace(historySearch))
+            {
+                var s = historySearch.ToLower();
+                query = query.Where(x => x.ProductName.ToLower().Contains(s));
+            }
+            if (!string.IsNullOrWhiteSpace(historyActionFilter))
+            {
+                query = query.Where(x => x.Action == historyActionFilter
+                    || (historyActionFilter == "Incoming" && x.Action == "KELDI")
+                    || (historyActionFilter == "Sold" && x.Action == "SOTILDI")
+                    || (historyActionFilter == "Outgoing" && x.Action == "KETDI"));
+            }
+            historyLogs = await query.Take(50).ToListAsync();
+        }
+        catch { }
+    }
+
+    private Task OpenAddInModal()
+    {
+        isDeleteMode = false;
+        isEditMode = false;
+        modalTitle = "Add new product";
+        submitButtonText = "Save";
+        ResetForm();
+        showProductModal = true;
+        return Task.CompletedTask;
+    }
+
+    private Task OpenDeleteModal()
+    {
+        isDeleteMode = true;
+        isEditMode = false;
+        modalTitle = "Delete product by ID";
+        submitButtonText = "Delete";
+        ResetForm();
+        showProductModal = true;
+        return Task.CompletedTask;
+    }
+
+    private async Task OpenEditModal(int itemId)
+    {
+        var item = logs.FirstOrDefault(x => x.Id == itemId) ?? await Repository.GetByIdAsync(itemId);
+        if (item is null)
+        {
+            pageError = "Product to edit was not found.";
+            return;
+        }
+
+        isDeleteMode = false;
+        isEditMode = true;
+        editId = item.Id;
+        modalTitle = $"Edit product ID {item.Id}";
+        submitButtonText = "Update";
+        errorMessage = "";
+        newProductName = item.Name;
+        newQuantity = item.Quantity;
+        newPrice = item.Price;
+        showProductModal = true;
+    }
+
+    private Task OpenQrModal(int itemId)
+    {
+        selectedQrItem = logs.FirstOrDefault(x => x.Id == itemId);
+        showQrModal = selectedQrItem is not null;
+        return Task.CompletedTask;
+    }
+
+    private async Task PrintAllQRCodes()
+    {
+        if (logs.Count == 0)
+        {
+            return;
+        }
+
+        await JSRuntime.InvokeVoidAsync("printElement", "printableQrArea", "Product QR Codes");
+    }
+
+    private void CloseProductModal()
+    {
+        showProductModal = false;
+        errorMessage = "";
+    }
+
+    private void CloseQrModal()
+    {
+        showQrModal = false;
+        selectedQrItem = null;
+    }
+
+    private void ResetForm()
+    {
+        newProductName = "";
+        newQuantity = 1;
+        newPrice = 0;
+        deleteId = 1;
+        editId = 0;
+        errorMessage = "";
+    }
+
+    private async Task SubmitModal()
+    {
+        if (isDeleteMode)
+        {
+            await DeleteTransaction();
+            return;
+        }
+
+        if (isEditMode)
+        {
+            await UpdateTransaction();
+            return;
+        }
+
+        await AddTransaction();
+    }
+
+    private bool IsProductFormInvalid()
+    {
+        if (string.IsNullOrWhiteSpace(newProductName))
+        {
+            errorMessage = "Please enter the product name.";
+            return true;
+        }
+
+        if (newQuantity <= 0)
+        {
+            errorMessage = "Quantity must be greater than 0.";
+            return true;
+        }
+
+        if (newPrice <= 0)
+        {
+            errorMessage = "Price must be greater than 0.";
+            return true;
+        }
+
+        errorMessage = "";
+        return false;
+    }
+
+    private async Task AddTransaction()
+    {
+        if (IsProductFormInvalid())
+        {
+            return;
+        }
+
+        try
+        {
+            var existing = logs.FirstOrDefault(p => p.Name.Equals(newProductName, StringComparison.OrdinalIgnoreCase));
+            if (existing is not null)
+            {
+                var prevQty = existing.Quantity;
+                existing.Quantity += newQuantity;
+                existing.TotalAmount = existing.Quantity * existing.Price;
+                await Repository.UpdateAsync(existing);
+                DbContext.ProductLogs.Add(new ProductLog
+                {
+                    ProductName = newProductName,
+                    ProductId = existing.Id,
+                    Action = "Incoming",
+                    PreviousQty = prevQty,
+                    ChangeQty = newQuantity,
+                    NewQty = existing.Quantity
+                });
+                await DbContext.SaveChangesAsync();
+                errorMessage = $"Updated: '{newProductName}' {prevQty} +{newQuantity} → {existing.Quantity}";
+            }
+            else
+            {
+                await Repository.AddAsync(new InventoryItem
+                {
+                    Name = newProductName,
+                    Quantity = newQuantity,
+                    Price = newPrice,
+                    MinLevel = 5
+                });
+                errorMessage = "";
+            }
+
+            await LoadDataAsync();
+            CloseProductModal();
+            ResetForm();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Add failed: {ex.Message}";
+        }
+    }
+
+    private async Task UpdateTransaction()
+    {
+        if (IsProductFormInvalid())
+        {
+            return;
+        }
+
+        try
+        {
+            var oldProduct = logs.FirstOrDefault(x => x.Id == editId);
+            if (oldProduct is null)
+            {
+                errorMessage = "Product to edit was not found.";
+                return;
+            }
+
+            var prevQty = oldProduct.Quantity;
+            var diff = newQuantity - prevQty;
+            var action = diff > 0 ? "Incoming" : diff < 0 ? "Outgoing" : "Change";
+
+            var updated = await Repository.UpdateAsync(new InventoryItem
+            {
+                Id = editId,
+                Name = newProductName,
+                Quantity = newQuantity,
+                Price = newPrice,
+                MinLevel = oldProduct.MinLevel
+            });
+
+            if (diff != 0)
+            {
+                DbContext.ProductLogs.Add(new ProductLog
+                {
+                    ProductName = newProductName,
+                    ProductId = editId,
+                    Action = action,
+                    PreviousQty = prevQty,
+                    ChangeQty = Math.Abs(diff),
+                    NewQty = newQuantity
+                });
+                await DbContext.SaveChangesAsync();
+            }
+
+            await LoadDataAsync();
+            CloseProductModal();
+            ResetForm();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Update failed: {ex.Message}";
+        }
+    }
+
+    private async Task DeleteTransaction()
+    {
+        try
+        {
+            var deleted = await Repository.DeleteAsync(deleteId);
+            if (!deleted)
+            {
+                errorMessage = "No product found with this ID.";
+                return;
+            }
+
+            await LoadDataAsync();
+            CloseProductModal();
+            ResetForm();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Delete failed: {ex.Message}";
+        }
+    }
+
+    private static string GetQrCodeUrl(InventoryItem item)
+    {
+        var payload =
+            $"ID:{item.Id};Product:{item.Name};Quantity:{item.Quantity};Price:{item.Price:N0};Total:{item.TotalAmount:N0}";
+
+        return $"https://api.qrserver.com/v1/create-qr-code/?size=220x220&data={Uri.EscapeDataString(payload)}";
+    }
+
+    private static string GetActionLabel(string action) => action switch
+    {
+        "KELDI" or "Incoming" => "Incoming",
+        "SOTILDI" or "Sold" => "Sold",
+        "KETDI" or "Outgoing" => "Outgoing",
+        "O'ZGARISH" or "Change" => "Change",
+        _ => action
+    };
+
+    private static string GetActionClass(string action) => action switch
+    {
+        "KELDI" or "Incoming" => "incoming",
+        "SOTILDI" or "Sold" => "sold",
+        "KETDI" or "Outgoing" => "outgoing",
+        "O'ZGARISH" or "Change" => "change",
+        _ => action.ToLower()
+    };
+
+    private static bool IsOutgoingAction(string action) => action switch
+    {
+        "SOTILDI" or "Sold" or "KETDI" or "Outgoing" => true,
+        _ => false
+    };
+
+    [Inject]
+    private IJSRuntime JSRuntime { get; set; } = null!;
+
+    [Inject]
+    private IInventoryRepository Repository { get; set; } = null!;
+}

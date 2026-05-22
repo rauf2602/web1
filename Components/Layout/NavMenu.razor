@@ -1,0 +1,116 @@
+﻿<div class="sidebar">
+    <div class="sidebar-header">
+        <div class="logo">
+            <span class="logo-icon">🏪</span>
+            <span class="logo-text">Store Manager</span>
+        </div>
+    </div>
+
+    <nav class="sidebar-nav">
+        <NavLink class="nav-item" href="sales" Match="NavLinkMatch.All">
+            <span class="nav-icon">💳</span>
+            <span class="nav-label">Sales</span>
+        </NavLink>
+
+        <NavLink class="nav-item" href="statistics">
+            <span class="nav-icon">📊</span>
+            <span class="nav-label">Statistics</span>
+        </NavLink>
+
+        <NavLink class="nav-item" href="">
+            <span class="nav-icon">🏠</span>
+            <span class="nav-label">Home</span>
+        </NavLink>
+
+        <NavLink class="nav-item" href="login">
+            <span class="nav-icon">🔑</span>
+            <span class="nav-label">Login</span>
+        </NavLink>
+
+        <NavLink class="nav-item" href="register">
+            <span class="nav-icon">📝</span>
+            <span class="nav-label">Register</span>
+        </NavLink>
+    </nav>
+</div>
+
+<style>
+    .sidebar {
+        width: 250px;
+        height: 100vh;
+        background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%);
+        display: flex;
+        flex-direction: column;
+        position: fixed;
+        top: 0;
+        left: 0;
+        z-index: 100;
+        box-shadow: 4px 0 20px rgba(0,0,0,.3);
+    }
+
+    .sidebar-header {
+        padding: 24px 20px;
+        border-bottom: 1px solid rgba(255,255,255,.1);
+    }
+
+    .logo {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+
+    .logo-icon {
+        font-size: 2rem;
+    }
+
+    .logo-text {
+        font-size: 1.25rem;
+        font-weight: 800;
+        color: #ffffff;
+        letter-spacing: .5px;
+    }
+
+    .sidebar-nav {
+        padding: 16px 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        flex: 1;
+    }
+
+    .nav-item {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 14px 16px;
+        border-radius: 12px;
+        color: #94a3b8;
+        text-decoration: none;
+        font-weight: 600;
+        font-size: .95rem;
+        transition: all .2s ease;
+        position: relative;
+    }
+
+    .nav-item:hover {
+        background: rgba(255,255,255,.1);
+        color: #e2e8f0;
+    }
+
+    .nav-item.active {
+        background: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%);
+        color: #ffffff;
+        box-shadow: 0 4px 12px rgba(79,70,229,.4);
+    }
+
+    .nav-icon {
+        font-size: 1.25rem;
+    }
+
+    .nav-label {
+        flex: 1;
+    }
+
+    /* Hide default bootstrap nav */
+    .top-row, .navbar-toggler, .nav-scrollable { display: none; }
+</style>

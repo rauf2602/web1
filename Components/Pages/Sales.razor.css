@@ -1,0 +1,43 @@
+/* Modern Sales UI - CSS Isolation */
+:root {
+  --brand: #4f46e5;
+  --bg: #f7f7fb;
+  --card: #ffffff;
+  --text: #0f172a;
+}
+
+/* Two-column layout: products + cart */
+.pos-container {
+  display: grid;
+  grid-template-columns: 1fr 420px;
+  gap: 20px;
+  padding: 12px;
+}
+
+@media (max-width: 1024px) {
+  .pos-container { grid-template-columns: 1fr; }
+}
+
+/* Product cards (if present) */
+.product-card {
+  background: var(--card);
+  border-radius: 12px;
+  padding: 12px;
+  box-shadow: 0 6px 20px rgba(0,0,0,.08);
+  border: 1px solid rgba(0,0,0,.05);
+  transition: transform .2s ease, box-shadow .2s ease;
+}
+
+.product-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 14px 28px rgba(0,0,0,.12);
+}
+
+/* Simple header styling for POS */
+.pos-title {
+  background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+  color: white;
+  padding: 10px 14px;
+  border-radius: 8px;
+  display: inline-block;
+}

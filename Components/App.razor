@@ -1,0 +1,82 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <base href="/" />
+    <link rel="stylesheet" href="@Assets["lib/bootstrap/dist/css/bootstrap.min.css"]" />
+    <link rel="stylesheet" href="@Assets["app.css"]" />
+    <link rel="stylesheet" href="@Assets["BlazorApp4.styles.css"]" />
+    <script>
+        (function () {
+            if (localStorage.getItem('dm') === 'true') {
+                document.documentElement.classList.add('dm');
+                document.body.classList.add('dm');
+            }
+        })();
+    </script>
+    <ImportMap />
+    <link rel="icon" type="image/png" href="favicon.png" />
+    <HeadOutlet />
+</head>
+<body>
+    <CascadingAuthenticationState>
+        <Routes />
+    </CascadingAuthenticationState>
+    <script src="@Assets["lib/bootstrap/dist/js/bootstrap.bundle.min.js"]"></script>
+    <script src="_framework/blazor.web.js"></script>
+    <script>
+        window.toggleDarkMode = function () {
+            var isDark = document.documentElement.classList.toggle('dm');
+            document.body.classList.toggle('dm');
+
+            var pageEl = document.querySelector('.page');
+            if (pageEl) {
+                pageEl.classList.toggle('dm');
+            }
+
+            var toggleEl = document.querySelector('.theme-switch');
+            if (toggleEl) {
+                if (isDark) {
+                    toggleEl.classList.add('active');
+                } else {
+                    toggleEl.classList.remove('active');
+                }
+            }
+
+            localStorage.setItem('dm', isDark);
+        };
+
+        function showModalById(modalId) {
+            const el = document.getElementById(modalId);
+            if (!el) return;
+            bootstrap.Modal.getOrCreateInstance(el).show();
+        }
+        function closeModalById(modalId) {
+            const el = document.getElementById(modalId);
+            if (!el) return;
+            const m = bootstrap.Modal.getInstance(el);
+            if (m) m.hide();
+        }
+        function printElement(elementId, title) {
+            const source = document.getElementById(elementId);
+            if (!source) return;
+            const h = document.getElementById("__printHost");
+            if (h) h.remove();
+            const printHost = document.createElement("div");
+            printHost.id = "__printHost";
+            printHost.innerHTML = source.innerHTML;
+            document.body.appendChild(printHost);
+            document.body.classList.add("qr-print-mode");
+            document.title = title;
+            const cleanup = () => { document.body.classList.remove("qr-print-mode"); const hh = document.getElementById("__printHost"); if (hh) hh.remove(); window.removeEventListener("afterprint", cleanup); };
+            window.addEventListener("afterprint", cleanup);
+            const imgs = Array.from(printHost.getElementsByTagName("img"));
+            Promise.all(imgs.map(i => i.complete ? Promise.resolve() : new Promise(r => { i.onload = r; i.onerror = r; }))).then(() => { window.print(); setTimeout(cleanup, 1500); });
+        }
+        window.showModalById = showModalById;
+        window.closeModalById = closeModalById;
+        window.printElement = printElement;
+    </script>
+</body>
+</html>

@@ -1,0 +1,1302 @@
+@page "/sales"
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+@using BlazorApp4.Models
+@using BlazorApp4.Services
+@using BlazorApp4.Data
+@using Microsoft.EntityFrameworkCore
+@inject CustomAuthProvider AuthState
+@inject NavigationManager Nav
+@inject IInventoryRepository InventoryRepository
+@inject AppDbContext DbContext
+
+<div class="sales-page">
+    <!-- Header -->
+    <div class="sales-header">
+        <div class="header-content">
+            <h1 class="sales-title">
+                <span class="title-icon">💳</span>
+                <span>Point of Sale</span>
+            </h1>
+            <div class="header-stats">
+                <div class="stat-badge">
+                    <span class="stat-value">@allProducts.Count</span>
+                    <span class="stat-label">Products</span>
+                </div>
+                <div class="stat-badge">
+                    <span class="stat-value">@cart.Count</span>
+                    <span class="stat-label">In Cart</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="sales-layout">
+        <!-- Products Panel -->
+        <div class="products-panel">
+            <div class="panel-header">
+                <h3 class="panel-title">
+                    <span class="panel-icon">📦</span>
+                    Products
+                </h3>
+                <div class="search-box">
+                    <span class="search-icon">🔍</span>
+                    <input type="text" class="search-input" @bind="searchText" @bind:after="FilterProducts" placeholder="Search product..." />
+                </div>
+            </div>
+
+            <div class="products-grid">
+                @if (isLoadingProducts)
+                {
+                    @for (int i = 0; i < 6; i++)
+                    {
+                        <div class="product-card skeleton">
+                            <div class="skeleton-avatar"></div>
+                            <div class="skeleton-line skeleton-title"></div>
+                            <div class="skeleton-line skeleton-price"></div>
+                            <div class="skeleton-line skeleton-stock"></div>
+                        </div>
+                    }
+                }
+                else if (!filteredProducts.Any())
+                {
+                    <div class="empty-state">
+                        <div class="empty-icon">📭</div>
+                        <h4>No products found</h4>
+                        <p>Try adjusting your search</p>
+                    </div>
+                }
+                else
+                {
+                    @foreach (var product in filteredProducts)
+                    {
+                        var isOutOfStock = product.Quantity <= 0;
+                        var inCart = cart.FirstOrDefault(c => c.ProductId == product.Id);
+                        var productImage = GetProductImage(product.Name);
+                        <div class="product-card @(isOutOfStock ? "out-of-stock" : "") @(inCart != null ? "in-cart" : "")" 
+                             @onclick="() => AddToCart(product)" 
+                             @onclick:preventDefault="isOutOfStock">
+                            <div class="product-image">
+                                @if (!string.IsNullOrEmpty(productImage))
+                                {
+                                    <img src="@productImage" alt="@product.Name" loading="lazy" />
+                                }
+                                else
+                                {
+                                    <div class="product-avatar color-@(product.Id % 8)">
+                                        @(product.Name.FirstOrDefault() + (product.Name.Length > 1 ? product.Name[1].ToString() : "")).ToUpper()
+                                    </div>
+                                }
+                            </div>
+                            <div class="product-badge">
+                                @if (inCart != null)
+                                {
+                                    <span class="badge-cart">@inCart.Quantity</span>
+                                }
+                                else if (isOutOfStock)
+                                {
+                                    <span class="badge-out">Sold Out</span>
+                                }
+                                else if (product.Quantity <= 5)
+                                {
+                                    <span class="badge-low">Low Stock</span>
+                                }
+                            </div>
+                            <div class="product-info">
+                                <h4 class="product-name">@product.Name</h4>
+                                <div class="product-price-row">
+                                    <span class="product-price">@product.Price.ToString("N0") UZS</span>
+                                </div>
+                                <div class="product-stock">
+                                    <span class="stock-dot @(isOutOfStock ? "dot-red" : product.Quantity <= 5 ? "dot-yellow" : "dot-green")"></span>
+                                    @(isOutOfStock ? "Out of stock" : $"{product.Quantity} in stock")
+                                </div>
+                            </div>
+                            <div class="product-action">
+                                <button class="add-btn" disabled="isOutOfStock">
+                                    <span>+</span>
+                                </button>
+                            </div>
+                        </div>
+                    }
+                }
+            </div>
+        </div>
+
+        <!-- Cart Panel -->
+        <div class="cart-panel">
+            <div class="cart-header">
+                <h3 class="cart-title">
+                    <span class="cart-icon">🛒</span>
+                    Current Order
+                    @if (cart.Any())
+                    {
+                        <span class="cart-count">@cart.Sum(c => c.Quantity)</span>
+                    }
+                </h3>
+            </div>
+
+            <!-- Alerts -->
+            @if (errorMessage is not null)
+            {
+                <div class="alert alert-error">
+                    <span class="alert-icon">⚠️</span>
+                    <span>@errorMessage</span>
+                    <button class="alert-close" @onclick="() => errorMessage = null">×</button>
+                </div>
+            }
+            @if (successMessage is not null)
+            {
+                <div class="alert alert-success">
+                    <span class="alert-icon">✅</span>
+                    <span>@successMessage</span>
+                    <button class="alert-close" @onclick="() => successMessage = null">×</button>
+                </div>
+            }
+
+            <!-- Cart Content -->
+            @if (!cart.Any())
+            {
+                <div class="cart-empty">
+                    <div class="empty-cart-icon">🛒</div>
+                    <h4>Cart is empty</h4>
+                    <p>Click a product to add it to cart</p>
+                </div>
+            }
+            else
+            {
+                <div class="cart-items">
+                    @for (int i = 0; i < cart.Count; i++)
+                    {
+                        var index = i;
+                        var item = cart[i];
+                        var stock = allProducts.FirstOrDefault(p => p.Id == item.ProductId)?.Quantity ?? 0;
+                        var isOverStock = item.Quantity > stock;
+                        <div class="cart-item @(isOverStock ? "item-error" : "") @(pulseProductId == item.ProductId ? "pulse" : "")">
+                            <div class="cart-item-info">
+                                <h5 class="cart-item-name">@item.ProductName</h5>
+                                <span class="cart-item-price">@item.UnitPrice.ToString("N0") UZS each</span>
+                            </div>
+                            <div class="cart-item-controls">
+                                <div class="qty-group">
+                                    <button class="qty-btn" @onclick="() => ChangeQty(index, -1)" disabled="@(item.Quantity <= 1)">−</button>
+                                    <input type="number" class="qty-input" @bind="item.Quantity" @bind:after="() => ValidateQty(index)" min="1" />
+                                    <button class="qty-btn" @onclick="() => ChangeQty(index, 1)" disabled="@(item.Quantity >= stock)">+</button>
+                                </div>
+                                <span class="item-total">@item.LineTotal.ToString("N0") UZS</span>
+                                <button class="remove-btn" @onclick="() => RemoveFromCart(index)">
+                                    <span>🗑️</span>
+                                </button>
+                            </div>
+                            @if (isOverStock)
+                            {
+                                <div class="stock-warning">Only {stock} available</div>
+                            }
+                        </div>
+                    }
+                </div>
+
+                <!-- Cart Summary -->
+                <div class="cart-summary">
+                    <div class="summary-row">
+                        <span>Subtotal</span>
+                        <span>@CartTotal.ToString("N0") UZS</span>
+                    </div>
+                    <div class="summary-row">
+                        <span>Items</span>
+                        <span>@cart.Count product(s)</span>
+                    </div>
+                    <div class="summary-divider"></div>
+                    <div class="summary-total">
+                        <span>Total</span>
+                        <span class="total-amount">@CartTotal.ToString("N0") UZS</span>
+                    </div>
+                </div>
+
+                <!-- Cart Actions -->
+                <div class="cart-actions">
+                    <button class="btn-clear" @onclick="ClearCart" disabled="@(cart.Count == 0)">
+                        <span>🗑️</span> Clear
+                    </button>
+                    <button class="btn-checkout" @onclick="ProcessSale" disabled="@(cart.Count == 0 || isProcessing)">
+                        @if (isProcessing)
+                        {
+                            <span class="spinner"></span>
+                            <span>Processing...</span>
+                        }
+                        else
+                        {
+                            <span>💰</span>
+                            <span>Complete Sale</span>
+                        }
+                    </button>
+                </div>
+            }
+        </div>
+    </div>
+
+    <!-- Sales History -->
+    <div class="history-section">
+        <h3 class="history-title">
+            <span class="history-icon">📊</span>
+            Recent Sales
+        </h3>
+        @if (recentSales.Any())
+        {
+            <div class="sales-grid">
+                @foreach (var sale in recentSales)
+                {
+                    <div class="sale-card">
+                        <div class="sale-header">
+                            <span class="sale-id">#{sale.Id}</span>
+                            <span class="sale-date">@sale.SaleDate.ToString("dd.MM HH:mm")</span>
+                        </div>
+                        <div class="sale-items">
+                            <span>@sale.Items.Count item(s)</span>
+                        </div>
+                        <div class="sale-total">@sale.TotalPrice.ToString("N0") UZS</div>
+                    </div>
+                }
+            </div>
+        }
+        else
+        {
+            <div class="empty-history">
+                <span class="empty-icon">📭</span>
+                <p>No sales recorded yet</p>
+            </div>
+        }
+    </div>
+</div>
+
+<style>
+    /* ===== BASE VARIABLES ===== */
+    :root {
+        --primary: #4f46e5;
+        --primary-light: #6366f1;
+        --primary-dark: #4338ca;
+        --success: #10b981;
+        --success-dark: #059669;
+        --danger: #ef4444;
+        --warning: #f59e0b;
+        --bg: #f8fafc;
+        --surface: #ffffff;
+        --surface-hover: #f1f5f9;
+        --text: #0f172a;
+        --text-secondary: #64748b;
+        --text-muted: #94a3b8;
+        --border: #e2e8f0;
+        --shadow: 0 4px 6px -1px rgba(0,0,0,.1), 0 2px 4px -2px rgba(0,0,0,.1);
+        --shadow-lg: 0 10px 15px -3px rgba(0,0,0,.1), 0 4px 6px -4px rgba(0,0,0,.1);
+        --radius: 12px;
+        --radius-lg: 16px;
+    }
+
+    html.dm {
+        --bg: #0f172a;
+        --surface: #1e293b;
+        --surface-hover: #334155;
+        --text: #f8fafc;
+        --text-secondary: #cbd5e1;
+        --text-muted: #94a3b8;
+        --border: #334155;
+        --shadow: 0 4px 6px -1px rgba(0,0,0,.3), 0 2px 4px -2px rgba(0,0,0,.3);
+        --shadow-lg: 0 10px 15px -3px rgba(0,0,0,.3), 0 4px 6px -4px rgba(0,0,0,.3);
+    }
+
+    /* ===== PAGE LAYOUT ===== */
+    .sales-page {
+        min-height: 100vh;
+        background: var(--bg);
+        padding: 20px;
+    }
+
+    /* ===== HEADER ===== */
+    .sales-header {
+        background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+        border-radius: var(--radius-lg);
+        padding: 24px 32px;
+        margin-bottom: 24px;
+        box-shadow: var(--shadow-lg);
+    }
+
+    .header-content {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 16px;
+    }
+
+    .sales-title {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        color: white;
+        font-size: 1.75rem;
+        font-weight: 800;
+        margin: 0;
+    }
+
+    .title-icon {
+        font-size: 2rem;
+    }
+
+    .header-stats {
+        display: flex;
+        gap: 12px;
+    }
+
+    .stat-badge {
+        background: rgba(255,255,255,.2);
+        backdrop-filter: blur(10px);
+        border-radius: var(--radius);
+        padding: 8px 16px;
+        text-align: center;
+        color: white;
+    }
+
+    .stat-value {
+        display: block;
+        font-size: 1.25rem;
+        font-weight: 700;
+    }
+
+    .stat-label {
+        font-size: 0.75rem;
+        opacity: .8;
+    }
+
+    /* ===== MAIN LAYOUT ===== */
+    .sales-layout {
+        display: grid;
+        grid-template-columns: 1fr 400px;
+        gap: 24px;
+        margin-bottom: 24px;
+    }
+
+    @@media (max-width: 1024px) {
+        .sales-layout { grid-template-columns: 1fr; }
+    }
+
+    /* ===== PANELS ===== */
+    .products-panel, .cart-panel {
+        background: var(--surface);
+        border-radius: var(--radius-lg);
+        box-shadow: var(--shadow);
+        overflow: hidden;
+    }
+
+    .panel-header {
+        padding: 20px;
+        border-bottom: 1px solid var(--border);
+    }
+
+    .panel-title {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 1.25rem;
+        font-weight: 700;
+        color: var(--text);
+        margin: 0 0 16px 0;
+    }
+
+    .panel-icon { font-size: 1.5rem; }
+
+    /* ===== SEARCH ===== */
+    .search-box {
+        position: relative;
+    }
+
+    .search-icon {
+        position: absolute;
+        left: 12px;
+        top: 50%;
+        transform: translateY(-50%);
+        pointer-events: none;
+    }
+
+    .search-input {
+        width: 100%;
+        padding: 12px 12px 12px 40px;
+        border: 2px solid var(--border);
+        border-radius: var(--radius);
+        background: var(--surface);
+        color: var(--text);
+        font-size: 0.95rem;
+        transition: border-color .2s, box-shadow .2s;
+    }
+
+    .search-input:focus {
+        outline: none;
+        border-color: var(--primary);
+        box-shadow: 0 0 0 3px rgba(79,70,229,.15);
+    }
+
+    /* ===== PRODUCTS GRID ===== */
+    .products-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+        gap: 16px;
+        padding: 20px;
+        max-height: calc(100vh - 280px);
+        overflow-y: auto;
+    }
+
+    .product-card {
+        position: relative;
+        background: var(--surface);
+        border: 2px solid var(--border);
+        border-radius: var(--radius);
+        padding: 16px;
+        cursor: pointer;
+        transition: all .2s ease;
+        overflow: visible;
+    }
+
+    .product-card:hover:not(.out-of-stock) {
+        border-color: var(--primary);
+        transform: translateY(-4px);
+        box-shadow: var(--shadow-lg);
+    }
+
+    .product-card.in-cart {
+        border-color: var(--primary);
+        background: linear-gradient(135deg, rgba(79,70,229,.05), rgba(99,102,241,.05));
+    }
+
+    .product-card.out-of-stock {
+        opacity: .6;
+        cursor: not-allowed;
+        filter: grayscale(.5);
+    }
+
+    .product-image {
+        width: 100%;
+        height: 90px;
+        margin-bottom: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 8px;
+        background: var(--surface-hover);
+    }
+
+    .product-image img {
+        max-width: 100%;
+        max-height: 80px;
+        width: auto;
+        height: auto;
+        object-fit: contain;
+        border-radius: 6px;
+        transition: transform .3s;
+    }
+
+    .product-card:hover:not(.out-of-stock) .product-image img {
+        transform: scale(1.05);
+    }
+
+    .product-avatar {
+        width: 72px;
+        height: 72px;
+        border-radius: 16px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.5rem;
+        font-weight: 800;
+        color: white;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        box-shadow: 0 4px 12px rgba(0,0,0,.15);
+    }
+
+    .product-avatar.color-0 { background: linear-gradient(135deg, #6366f1, #8b5cf6); }
+    .product-avatar.color-1 { background: linear-gradient(135deg, #ec4899, #f43f5e); }
+    .product-avatar.color-2 { background: linear-gradient(135deg, #14b8a6, #06b6d4); }
+    .product-avatar.color-3 { background: linear-gradient(135deg, #f59e0b, #f97316); }
+    .product-avatar.color-4 { background: linear-gradient(135deg, #10b981, #22c55e); }
+    .product-avatar.color-5 { background: linear-gradient(135deg, #3b82f6, #6366f1); }
+    .product-avatar.color-6 { background: linear-gradient(135deg, #8b5cf6, #d946ef); }
+    .product-avatar.color-7 { background: linear-gradient(135deg, #ef4444, #f97316); }
+
+    html.dm .product-avatar { box-shadow: 0 4px 12px rgba(0,0,0,.4); }
+
+    .product-badge {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+    }
+
+    .badge-cart, .badge-out, .badge-low {
+        font-size: 0.7rem;
+        font-weight: 700;
+        padding: 4px 8px;
+        border-radius: 20px;
+        color: white;
+    }
+
+    .badge-cart { background: var(--primary); }
+    .badge-out { background: var(--danger); }
+    .badge-low { background: var(--warning); }
+
+    .product-info {
+        margin-bottom: 12px;
+    }
+
+    .product-name {
+        font-size: 0.95rem;
+        font-weight: 600;
+        color: var(--text);
+        margin: 0 0 8px 0;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .product-price-row {
+        margin-bottom: 8px;
+    }
+
+    .product-price {
+        font-size: 1rem;
+        font-weight: 800;
+        color: var(--success);
+    }
+
+    .product-stock {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 0.8rem;
+        color: var(--text-secondary);
+    }
+
+    .stock-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+    }
+
+    .dot-green { background: var(--success); }
+    .dot-yellow { background: var(--warning); }
+    .dot-red { background: var(--danger); }
+
+    .product-action {
+        position: absolute;
+        bottom: 12px;
+        right: 12px;
+    }
+
+    .add-btn {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        border: none;
+        background: var(--primary);
+        color: white;
+        font-size: 1.25rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all .2s;
+    }
+
+    .product-card:hover:not(.out-of-stock) .add-btn {
+        background: var(--primary-dark);
+        transform: scale(1.1);
+    }
+
+    .add-btn:disabled {
+        background: var(--text-muted);
+        cursor: not-allowed;
+    }
+
+    /* ===== SKELETON LOADING ===== */
+    .product-card.skeleton {
+        pointer-events: none;
+        border-color: var(--border);
+    }
+
+    .skeleton-line {
+        height: 12px;
+        border-radius: 6px;
+        background: linear-gradient(90deg, var(--surface-hover) 25%, var(--border) 50%, var(--surface-hover) 75%);
+        background-size: 200% 100%;
+        animation: shimmer 1.5s infinite;
+        margin-bottom: 8px;
+    }
+
+    .skeleton-title { width: 80%; height: 16px; }
+    .skeleton-price { width: 60%; }
+    .skeleton-stock { width: 40%; }
+    .skeleton-avatar { width: 72px; height: 72px; border-radius: 16px; margin: 0 auto 12px; background: linear-gradient(90deg, var(--surface-hover) 25%, var(--border) 50%, var(--surface-hover) 75%); background-size: 200% 100%; animation: shimmer 1.5s infinite; }
+
+    @@keyframes shimmer {
+        0% { background-position: 200% 0; }
+        100% { background-position: -200% 0; }
+    }
+
+    /* ===== CART PANEL ===== */
+    .cart-header {
+        padding: 20px;
+        border-bottom: 1px solid var(--border);
+    }
+
+    .cart-title {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 1.25rem;
+        font-weight: 700;
+        color: var(--text);
+        margin: 0;
+    }
+
+    .cart-count {
+        background: var(--primary);
+        color: white;
+        font-size: 0.8rem;
+        padding: 4px 10px;
+        border-radius: 20px;
+        font-weight: 600;
+    }
+
+    /* ===== ALERTS ===== */
+    .alert {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin: 16px 20px 0 20px;
+        padding: 12px 16px;
+        border-radius: var(--radius);
+        font-size: 0.9rem;
+    }
+
+    .alert-error {
+        background: #fef2f2;
+        border: 1px solid #fecaca;
+        color: #991b1b;
+    }
+
+    .alert-success {
+        background: #f0fdf4;
+        border: 1px solid #bbf7d0;
+        color: #166534;
+    }
+
+    html.dm .alert-error {
+        background: rgba(239,68,68,.15);
+        border-color: rgba(239,68,68,.3);
+        color: #fca5a5;
+    }
+
+    html.dm .alert-success {
+        background: rgba(16,185,129,.15);
+        border-color: rgba(16,185,129,.3);
+        color: #6ee7b7;
+    }
+
+    .alert-close {
+        margin-left: auto;
+        background: none;
+        border: none;
+        font-size: 1.25rem;
+        color: inherit;
+        cursor: pointer;
+        opacity: .6;
+    }
+
+    .alert-close:hover { opacity: 1; }
+
+    /* ===== CART EMPTY ===== */
+    .cart-empty {
+        text-align: center;
+        padding: 48px 20px;
+        color: var(--text-muted);
+    }
+
+    .empty-cart-icon {
+        font-size: 4rem;
+        margin-bottom: 16px;
+        opacity: .5;
+    }
+
+    .cart-empty h4 {
+        font-size: 1.1rem;
+        color: var(--text-secondary);
+        margin: 0 0 8px 0;
+    }
+
+    .cart-empty p {
+        font-size: 0.85rem;
+        margin: 0;
+    }
+
+    /* ===== CART ITEMS ===== */
+    .cart-items {
+        padding: 16px 20px;
+        max-height: calc(100vh - 520px);
+        overflow-y: auto;
+    }
+
+    .cart-item {
+        padding: 12px;
+        border-radius: var(--radius);
+        background: var(--surface-hover);
+        margin-bottom: 12px;
+        transition: all .2s;
+    }
+
+    .cart-item.item-error {
+        background: rgba(239,68,68,.08);
+        border: 1px solid rgba(239,68,68,.2);
+    }
+
+    .cart-item.pulse {
+        animation: cartPulse .4s ease;
+    }
+
+    @@keyframes cartPulse {
+        0% { transform: scale(1); }
+        50% { transform: scale(1.03); background: rgba(79,70,229,.1); }
+        100% { transform: scale(1); }
+    }
+
+    .cart-item-info {
+        margin-bottom: 8px;
+    }
+
+    .cart-item-name {
+        font-size: 0.95rem;
+        font-weight: 600;
+        color: var(--text);
+        margin: 0 0 4px 0;
+    }
+
+    .cart-item-price {
+        font-size: 0.8rem;
+        color: var(--text-secondary);
+    }
+
+    .cart-item-controls {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+
+    .qty-group {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        background: var(--surface);
+        border-radius: var(--radius);
+        padding: 4px;
+    }
+
+    .qty-btn {
+        width: 28px;
+        height: 28px;
+        border: none;
+        background: var(--surface-hover);
+        border-radius: 8px;
+        font-size: 1rem;
+        color: var(--text);
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all .15s;
+    }
+
+    .qty-btn:hover:not(:disabled) {
+        background: var(--primary);
+        color: white;
+    }
+
+    .qty-btn:disabled {
+        opacity: .3;
+        cursor: not-allowed;
+    }
+
+    .qty-input {
+        width: 48px;
+        text-align: center;
+        border: none;
+        background: transparent;
+        color: var(--text);
+        font-weight: 600;
+        font-size: 0.95rem;
+    }
+
+    .qty-input:focus { outline: none; }
+
+    .item-total {
+        font-weight: 700;
+        color: var(--success);
+        font-size: 0.95rem;
+        margin-left: auto;
+    }
+
+    .remove-btn {
+        background: none;
+        border: none;
+        cursor: pointer;
+        padding: 4px;
+        opacity: .6;
+        transition: all .15s;
+    }
+
+    .remove-btn:hover {
+        opacity: 1;
+        transform: scale(1.1);
+    }
+
+    .stock-warning {
+        font-size: 0.75rem;
+        color: var(--danger);
+        margin-top: 4px;
+    }
+
+    /* ===== CART SUMMARY ===== */
+    .cart-summary {
+        padding: 20px;
+        background: var(--surface-hover);
+        border-top: 1px solid var(--border);
+    }
+
+    .summary-row {
+        display: flex;
+        justify-content: space-between;
+        padding: 8px 0;
+        color: var(--text-secondary);
+        font-size: 0.9rem;
+    }
+
+    .summary-divider {
+        height: 1px;
+        background: var(--border);
+        margin: 8px 0;
+    }
+
+    .summary-total {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding-top: 8px;
+    }
+
+    .summary-total span:first-child {
+        font-size: 1rem;
+        font-weight: 600;
+        color: var(--text);
+    }
+
+    .total-amount {
+        font-size: 1.5rem;
+        font-weight: 800;
+        color: var(--success);
+    }
+
+    /* ===== CART ACTIONS ===== */
+    .cart-actions {
+        display: flex;
+        gap: 12px;
+        padding: 16px 20px;
+        border-top: 1px solid var(--border);
+    }
+
+    .btn-clear, .btn-checkout {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 14px 20px;
+        border-radius: var(--radius);
+        font-weight: 600;
+        font-size: 0.95rem;
+        cursor: pointer;
+        transition: all .2s;
+        border: none;
+    }
+
+    .btn-clear {
+        background: var(--surface-hover);
+        color: var(--text-secondary);
+        flex: 0 0 auto;
+    }
+
+    .btn-clear:hover:not(:disabled) {
+        background: var(--danger);
+        color: white;
+    }
+
+    .btn-checkout {
+        background: linear-gradient(135deg, var(--success), var(--success-dark));
+        color: white;
+        flex: 1;
+    }
+
+    .btn-checkout:hover:not(:disabled) {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 20px rgba(16,185,129,.3);
+    }
+
+    .btn-checkout:disabled {
+        opacity: .5;
+        cursor: not-allowed;
+    }
+
+    .spinner {
+        width: 18px;
+        height: 18px;
+        border: 2px solid white;
+        border-top-color: transparent;
+        border-radius: 50%;
+        animation: spin .6s linear infinite;
+    }
+
+    @@keyframes spin {
+        to { transform: rotate(360deg); }
+    }
+
+    /* ===== SALES HISTORY ===== */
+    .history-section {
+        background: var(--surface);
+        border-radius: var(--radius-lg);
+        padding: 24px;
+        box-shadow: var(--shadow);
+    }
+
+    .history-title {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 1.25rem;
+        font-weight: 700;
+        color: var(--text);
+        margin: 0 0 16px 0;
+    }
+
+    .sales-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+        gap: 12px;
+    }
+
+    .sale-card {
+        background: var(--surface-hover);
+        border-radius: var(--radius);
+        padding: 16px;
+        transition: all .2s;
+    }
+
+    .sale-card:hover {
+        transform: translateY(-2px);
+        box-shadow: var(--shadow);
+    }
+
+    .sale-header {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 8px;
+    }
+
+    .sale-id {
+        font-weight: 700;
+        color: var(--primary);
+    }
+
+    .sale-date {
+        font-size: 0.8rem;
+        color: var(--text-muted);
+    }
+
+    .sale-items {
+        font-size: 0.85rem;
+        color: var(--text-secondary);
+        margin-bottom: 8px;
+    }
+
+    .sale-total {
+        font-weight: 800;
+        color: var(--success);
+        font-size: 1.1rem;
+    }
+
+    .empty-history {
+        text-align: center;
+        padding: 32px;
+        color: var(--text-muted);
+    }
+
+    .empty-history .empty-icon {
+        font-size: 3rem;
+        display: block;
+        margin-bottom: 12px;
+        opacity: .5;
+    }
+
+    /* ===== RESPONSIVE ===== */
+    @@media (max-width: 768px) {
+        .sales-header { padding: 16px; }
+        .sales-title { font-size: 1.25rem; }
+        .products-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
+        .sales-layout { gap: 16px; }
+    }
+</style>
+
+@code {
+    private List<InventoryItem> allProducts = new();
+    private List<InventoryItem> filteredProducts = new();
+    private List<CartItem> cart = new();
+    private List<Sale> recentSales = new();
+    private string searchText = "";
+    private string? errorMessage;
+    private string? successMessage;
+    private bool isLoadingProducts = true;
+    private bool isProcessing = false;
+    private int? pulseProductId;
+
+    private void AddToCart(InventoryItem product)
+    {
+        if (product.Quantity <= 0) return;
+
+        errorMessage = null;
+        successMessage = null;
+
+        var existing = cart.FirstOrDefault(c => c.ProductId == product.Id);
+        if (existing is not null)
+        {
+            if (existing.Quantity >= product.Quantity)
+            {
+                errorMessage = $"Not enough stock for {product.Name}. Available: {product.Quantity}";
+                StateHasChanged();
+                return;
+            }
+            existing.Quantity++;
+            pulseProductId = product.Id;
+            _ = Task.Delay(400).ContinueWith(_ => { pulseProductId = null; InvokeAsync(StateHasChanged); });
+        }
+        else
+        {
+            cart.Add(new CartItem
+            {
+                ProductId = product.Id,
+                ProductName = product.Name,
+                UnitPrice = product.Price,
+                Quantity = 1
+            });
+        }
+        StateHasChanged();
+    }
+
+    private void ChangeQty(int index, int delta)
+    {
+        var item = cart[index];
+        var product = allProducts.FirstOrDefault(p => p.Id == item.ProductId);
+        var newQty = item.Quantity + delta;
+
+        if (product is not null && newQty > product.Quantity)
+        {
+            errorMessage = $"Not enough stock for {item.ProductName}. Available: {product.Quantity}";
+            StateHasChanged();
+            return;
+        }
+
+        if (newQty > 0)
+        {
+            item.Quantity = newQty;
+            errorMessage = null;
+        }
+        StateHasChanged();
+    }
+
+    private void ValidateQty(int index)
+    {
+        var item = cart[index];
+        var product = allProducts.FirstOrDefault(p => p.Id == item.ProductId);
+
+        if (item.Quantity <= 0)
+        {
+            cart.RemoveAt(index);
+        }
+        else if (product is not null && item.Quantity > product.Quantity)
+        {
+            item.Quantity = product.Quantity;
+            errorMessage = $"Reduced to available stock: {product.Quantity}";
+        }
+        StateHasChanged();
+    }
+
+    private void RemoveFromCart(int index)
+    {
+        cart.RemoveAt(index);
+        errorMessage = null;
+        StateHasChanged();
+    }
+
+    private void ClearCart()
+    {
+        cart = new List<CartItem>();
+        errorMessage = null;
+        successMessage = null;
+        StateHasChanged();
+    }
+
+    private decimal CartTotal => cart.Sum(c => c.LineTotal);
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!AuthState.IsAuthenticated)
+        {
+            Nav.NavigateTo("/login");
+            return;
+        }
+        await LoadProducts();
+        await LoadRecentSales();
+    }
+
+    private async Task LoadProducts()
+    {
+        isLoadingProducts = true;
+        try
+        {
+            allProducts = await InventoryRepository.GetAllAsync();
+            filteredProducts = allProducts;
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Failed to load products: {ex.Message}";
+        }
+        finally
+        {
+            isLoadingProducts = false;
+        }
+    }
+
+    private async Task LoadRecentSales()
+    {
+        try
+        {
+            recentSales = await DbContext.Sales
+                .OrderByDescending(s => s.SaleDate)
+                .Take(10)
+                .ToListAsync();
+        }
+        catch { }
+    }
+
+    private void FilterProducts()
+    {
+        if (string.IsNullOrWhiteSpace(searchText))
+        {
+            filteredProducts = allProducts;
+        }
+        else
+        {
+            var query = searchText.Trim().ToLower();
+            filteredProducts = allProducts.Where(p =>
+                p.Name.ToLower().Contains(query) || p.Id.ToString().Contains(query)
+            ).ToList();
+        }
+    }
+
+    private async Task ProcessSale()
+    {
+        if (!cart.Any() || isProcessing) return;
+
+        isProcessing = true;
+        errorMessage = null;
+        successMessage = null;
+        StateHasChanged();
+
+        try
+        {
+            var freshProducts = await InventoryRepository.GetAllAsync();
+
+            foreach (var item in cart)
+            {
+                var product = freshProducts.FirstOrDefault(p => p.Id == item.ProductId);
+                if (product is null || product.Quantity < item.Quantity)
+                {
+                    errorMessage = $"Not enough stock for {item.ProductName}. Available: {product?.Quantity ?? 0}";
+                    isProcessing = false;
+                    StateHasChanged();
+                    return;
+                }
+            }
+
+            var sale = new Sale
+            {
+                SaleDate = DateTime.Now,
+                TotalPrice = CartTotal
+            };
+
+            DbContext.Sales.Add(sale);
+            await DbContext.SaveChangesAsync();
+
+            foreach (var item in cart)
+            {
+                DbContext.SaleItems.Add(new SaleItem
+                {
+                    SaleId = sale.Id,
+                    ProductId = item.ProductId,
+                    ProductName = item.ProductName,
+                    Quantity = item.Quantity,
+                    UnitPrice = item.UnitPrice
+                });
+            }
+
+            foreach (var item in cart)
+            {
+                var product = freshProducts.First(p => p.Id == item.ProductId);
+                var prevQty = product.Quantity;
+                product.Quantity -= item.Quantity;
+                product.TotalAmount = product.Quantity * product.Price;
+
+                DbContext.ProductLogs.Add(new ProductLog
+                {
+                    ProductName = item.ProductName,
+                    ProductId = item.ProductId,
+                    Action = "Sold",
+                    PreviousQty = prevQty,
+                    ChangeQty = item.Quantity,
+                    NewQty = product.Quantity
+                });
+            }
+
+            await DbContext.SaveChangesAsync();
+
+            successMessage = $"Sale completed! Total: {CartTotal:N0} UZS";
+            cart = new List<CartItem>();
+            await LoadProducts();
+            await LoadRecentSales();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Sale failed: {ex.Message}";
+        }
+        finally
+        {
+            isProcessing = false;
+            StateHasChanged();
+        }
+    }
+
+    private string GetProductImage(string name)
+    {
+        var n = name.ToLower().Trim();
+        if (n.Contains("apple") || n.Contains("olma")) return "/images/products/apple.png";
+        if (n.Contains("banana") || n.Contains("banan")) return "/images/products/banana.png";
+        if (n.Contains("cola") || n.Contains("coca") || n.Contains("coke") || n.Contains("koka") || n.Contains("colla")) return "/images/products/colla.png";
+        if (n.Contains("fanta")) return "/images/products/fanta.png";
+        if (n.Contains("hleb") || n.Contains("bread")) return "/images/products/hleb.png";
+        if (n.Contains("non")) return "/images/products/non.png";
+        if (n.Contains("Rc")) return "/images/products/rc.png";
+        if (n.Contains("pepsi")) return "/images/products/pepsi.png";
+        if (n.Contains("pizza")) return "/images/products/pizza.png";
+        if (n.Contains("alpen gold")) return "/images/products/alpen gold.png";
+        return "";
+    }
+}

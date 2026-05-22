@@ -1,0 +1,30 @@
+/* Modern navigation styling */
+.top-row {
+  background: linear-gradient(90deg, #0b1220 0%, #1f2a5c 100%);
+  border-bottom: 1px solid rgba(255,255,255,.15);
+  box-shadow: 0 6px 20px rgba(0,0,0,.15);
+}
+.nav-scrollable {
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(6px);
+  transition: background 0.3s;
+}
+.nav-link {
+  color: #0f172a;
+  font-weight: 600;
+  letter-spacing: .2px;
+  transition: color 0.3s;
+}
+.nav-link:hover { color: #374151; }
+.theme-toggle {
+  margin-top: auto;
+}
+.theme-icon { margin-right: 6px; }
+
+html.dm .nav-scrollable {
+  background: rgba(15, 23, 42, 0.95);
+}
+html.dm .nav-link {
+  color: #e2e8f0;
+}
+html.dm .nav-link:hover { color: #f1f5f9; }

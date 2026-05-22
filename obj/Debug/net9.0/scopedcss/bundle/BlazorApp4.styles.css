@@ -1,0 +1,179 @@
+/* /Components/Layout/MainLayout.razor.rz.scp.css */
+.page[b-y97violqbf] {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+}
+
+main[b-y97violqbf] {
+    flex: 1;
+}
+
+.sidebar[b-y97violqbf] {
+    background-image: linear-gradient(180deg, rgb(5, 39, 103) 0%, #3a0647 70%);
+}
+
+.top-row[b-y97violqbf] {
+    background-color: #f7f7f7;
+    border-bottom: 1px solid #d6d5d5;
+    justify-content: flex-end;
+    height: 3.5rem;
+    display: flex;
+    align-items: center;
+}
+
+    .top-row[b-y97violqbf]  a, .top-row[b-y97violqbf]  .btn-link {
+        white-space: nowrap;
+        margin-left: 1.5rem;
+        text-decoration: none;
+    }
+
+    .top-row[b-y97violqbf]  a:hover, .top-row[b-y97violqbf]  .btn-link:hover {
+        text-decoration: underline;
+    }
+
+    .top-row[b-y97violqbf]  a:first-child {
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+@media (max-width: 640.98px) {
+    .top-row[b-y97violqbf] {
+        justify-content: space-between;
+    }
+
+    .top-row[b-y97violqbf]  a, .top-row[b-y97violqbf]  .btn-link {
+        margin-left: 0;
+    }
+}
+
+@media (min-width: 641px) {
+    .page[b-y97violqbf] {
+        flex-direction: row;
+    }
+
+    .sidebar[b-y97violqbf] {
+        width: 250px;
+        height: 100vh;
+        position: sticky;
+        top: 0;
+    }
+
+    .top-row[b-y97violqbf] {
+        position: sticky;
+        top: 0;
+        z-index: 1;
+    }
+
+    .top-row.auth[b-y97violqbf]  a:first-child {
+        flex: 1;
+        text-align: right;
+        width: 0;
+    }
+
+    .top-row[b-y97violqbf], article[b-y97violqbf] {
+        padding-left: 2rem !important;
+        padding-right: 1.5rem !important;
+    }
+}
+
+html.dm .top-row[b-y97violqbf] {
+    background-color: #1e293b;
+    border-bottom: 1px solid #334155;
+}
+
+#blazor-error-ui[b-y97violqbf] {
+    color-scheme: light only;
+    background: lightyellow;
+    bottom: 0;
+    box-shadow: 0 -1px 2px rgba(0, 0, 0, 0.2);
+    box-sizing: border-box;
+    display: none;
+    left: 0;
+    padding: 0.6rem 1.25rem 0.7rem 1.25rem;
+    position: fixed;
+    width: 100%;
+    z-index: 1000;
+}
+
+    #blazor-error-ui .dismiss[b-y97violqbf] {
+        cursor: pointer;
+        position: absolute;
+        right: 0.75rem;
+        top: 0.5rem;
+    }
+/* /Components/Layout/NavMenu.razor.rz.scp.css */
+/* Modern navigation styling */
+.top-row[b-d0kz2ow9hc] {
+  background: linear-gradient(90deg, #0b1220 0%, #1f2a5c 100%);
+  border-bottom: 1px solid rgba(255,255,255,.15);
+  box-shadow: 0 6px 20px rgba(0,0,0,.15);
+}
+.nav-scrollable[b-d0kz2ow9hc] {
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(6px);
+  transition: background 0.3s;
+}
+.nav-link[b-d0kz2ow9hc] {
+  color: #0f172a;
+  font-weight: 600;
+  letter-spacing: .2px;
+  transition: color 0.3s;
+}
+.nav-link:hover[b-d0kz2ow9hc] { color: #374151; }
+.theme-toggle[b-d0kz2ow9hc] {
+  margin-top: auto;
+}
+.theme-icon[b-d0kz2ow9hc] { margin-right: 6px; }
+
+html.dm .nav-scrollable[b-d0kz2ow9hc] {
+  background: rgba(15, 23, 42, 0.95);
+}
+html.dm .nav-link[b-d0kz2ow9hc] {
+  color: #e2e8f0;
+}
+html.dm .nav-link:hover[b-d0kz2ow9hc] { color: #f1f5f9; }
+/* /Components/Pages/Sales.razor.rz.scp.css */
+/* Modern Sales UI - CSS Isolation */
+:root[b-7r5wssd9sr] {
+  --brand: #4f46e5;
+  --bg: #f7f7fb;
+  --card: #ffffff;
+  --text: #0f172a;
+}
+
+/* Two-column layout: products + cart */
+.pos-container[b-7r5wssd9sr] {
+  display: grid;
+  grid-template-columns: 1fr 420px;
+  gap: 20px;
+  padding: 12px;
+}
+
+@media (max-width: 1024px) {
+  .pos-container[b-7r5wssd9sr] { grid-template-columns: 1fr; }
+}
+
+/* Product cards (if present) */
+.product-card[b-7r5wssd9sr] {
+  background: var(--card);
+  border-radius: 12px;
+  padding: 12px;
+  box-shadow: 0 6px 20px rgba(0,0,0,.08);
+  border: 1px solid rgba(0,0,0,.05);
+  transition: transform .2s ease, box-shadow .2s ease;
+}
+
+.product-card:hover[b-7r5wssd9sr] {
+  transform: translateY(-2px);
+  box-shadow: 0 14px 28px rgba(0,0,0,.12);
+}
+
+/* Simple header styling for POS */
+.pos-title[b-7r5wssd9sr] {
+  background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+  color: white;
+  padding: 10px 14px;
+  border-radius: 8px;
+  display: inline-block;
+}
