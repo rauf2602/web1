@@ -680,6 +680,46 @@
             width: 100%;
             margin-right: 0 !important;
         }
+
+        .history-filters {
+            flex-direction: column;
+            gap: 8px;
+        }
+        .history-search, .history-filter {
+            width: 100%;
+        }
+    }
+
+    @@media (max-width: 480px) {
+        .manager-shell { padding: 14px 10px; border-radius: 16px; }
+        .manager-title { font-size: 1.2rem; }
+        .search-row { max-width: 100%; }
+        .search-row .form-control { font-size: .85rem; }
+        .summary-bar { flex-direction: column; gap: 8px; }
+        .summary-item { width: 100%; justify-content: space-between; }
+        .summary-label { font-size: .8rem; }
+        .summary-value { font-size: 1rem; }
+        .action-bar .btn { font-size: .8rem; padding: 8px 12px; }
+        .table-wrapper { overflow-x: auto; }
+        .inventory-table { font-size: .75rem; }
+        .inventory-table th, .inventory-table td { padding: 6px 4px; }
+        .inventory-table .btn-sm { padding: 2px 6px; font-size: .7rem; }
+        .history-shell { padding: 14px; }
+        .history-header { flex-direction: column; gap: 8px; }
+        .history-header h3 { font-size: 1rem; }
+        .history-filters { flex-direction: column; gap: 6px; }
+        .history-search, .history-filter { width: 100%; font-size: .85rem; }
+        .history-table { font-size: .7rem; }
+        .history-table th, .history-table td { padding: 4px; }
+        .history-table-wrapper { overflow-x: auto; }
+        .qr-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
+        .qr-card { padding: 10px; }
+        .qr-card img { width: 100px; height: 100px; }
+        .qr-card .product-name { font-size: .8rem; }
+        .modal-content { margin: 20px 10px; padding: 20px; }
+        .modal-title { font-size: 1.1rem; }
+        .modal-actions { flex-direction: column; gap: 8px; }
+        .modal-actions .btn { width: 100%; }
     }
 
     /* History Panel */
