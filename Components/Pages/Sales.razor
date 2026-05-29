@@ -1311,6 +1311,7 @@
                 var prevQty = product.Quantity;
                 product.Quantity -= item.Quantity;
                 product.TotalAmount = product.Quantity * product.Price;
+                db.InventoryItems.Update(product);
 
                 db.ProductLogs.Add(new ProductLog
                 {
