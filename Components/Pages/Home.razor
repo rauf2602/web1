@@ -84,8 +84,8 @@
                         <td>@item.Id</td>
                         <td>@item.Name</td>
                         <td class="@(isLow ? "low-stock" : "")">@item.Quantity</td>
-                        <td>@item.Price.ToString("N0") UZS</td>
-                        <td>@item.TotalAmount.ToString("N0") UZS</td>
+                        <td>@item.Price.ToString("N0") TJS</td>
+                        <td>@item.TotalAmount.ToString("N0") TJS</td>
                         <td>
                             @if (isLow)
                             {
@@ -142,7 +142,7 @@
                             <input type="number" class="form-control" @bind="newQuantity" min="1" />
                         </div>
                         <div class="mb-3">
-                            <label class="form-label">Price (UZS)</label>
+                            <label class="form-label">Price (TJS)</label>
                             <input type="number" class="form-control" @bind="newPrice" min="0" />
                         </div>
                     }
@@ -178,7 +178,7 @@
                         <h5 class="mb-2">@selectedQrItem.Name</h5>
                         <p class="mb-1">ID: @selectedQrItem.Id</p>
                         <p class="mb-1">Quantity: @selectedQrItem.Quantity</p>
-                        <p class="mb-0">Price: @selectedQrItem.Price.ToString("N0") UZS</p>
+                        <p class="mb-0">Price: @selectedQrItem.Price.ToString("N0") TJS</p>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -202,7 +202,7 @@
                 <h5>@item.Name</h5>
                 <p>ID: @item.Id</p>
                 <p>Quantity: @item.Quantity</p>
-                <p>Price: @item.Price.ToString("N0") UZS</p>
+                <p>Price: @item.Price.ToString("N0") TJS</p>
             </div>
         }
     </div>

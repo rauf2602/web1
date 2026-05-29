@@ -104,7 +104,7 @@
                             <div class="product-info">
                                 <h4 class="product-name">@product.Name</h4>
                                 <div class="product-price-row">
-                                    <span class="product-price">@product.Price.ToString("N0") UZS</span>
+                                    <span class="product-price">@product.Price.ToString("N0") TJS</span>
                                 </div>
                                 <div class="product-stock">
                                     <span class="stock-dot @(isOutOfStock ? "dot-red" : product.Quantity <= 5 ? "dot-yellow" : "dot-green")"></span>
@@ -174,7 +174,7 @@
                         <div class="cart-item @(isOverStock ? "item-error" : "") @(pulseProductId == item.ProductId ? "pulse" : "")">
                             <div class="cart-item-info">
                                 <h5 class="cart-item-name">@item.ProductName</h5>
-                                <span class="cart-item-price">@item.UnitPrice.ToString("N0") UZS each</span>
+                                <span class="cart-item-price">@item.UnitPrice.ToString("N0") TJS each</span>
                             </div>
                             <div class="cart-item-controls">
                                 <div class="qty-group">
@@ -182,7 +182,7 @@
                                     <input type="number" class="qty-input" @bind="item.Quantity" @bind:after="() => ValidateQty(index)" min="1" />
                                     <button class="qty-btn" @onclick="() => ChangeQty(index, 1)" disabled="@(item.Quantity >= stock)">+</button>
                                 </div>
-                                <span class="item-total">@item.LineTotal.ToString("N0") UZS</span>
+                                <span class="item-total">@item.LineTotal.ToString("N0") TJS</span>
                                 <button class="remove-btn" @onclick="() => RemoveFromCart(index)">
                                     <span>🗑️</span>
                                 </button>
@@ -199,7 +199,7 @@
                 <div class="cart-summary">
                     <div class="summary-row">
                         <span>Subtotal</span>
-                        <span>@CartTotal.ToString("N0") UZS</span>
+                        <span>@CartTotal.ToString("N0") TJS</span>
                     </div>
                     <div class="summary-row">
                         <span>Items</span>
@@ -208,7 +208,7 @@
                     <div class="summary-divider"></div>
                     <div class="summary-total">
                         <span>Total</span>
-                        <span class="total-amount">@CartTotal.ToString("N0") UZS</span>
+                        <span class="total-amount">@CartTotal.ToString("N0") TJS</span>
                     </div>
                 </div>
 
@@ -253,7 +253,7 @@
                         <div class="sale-items">
                             <span>@sale.Items.Count item(s)</span>
                         </div>
-                        <div class="sale-total">@sale.TotalPrice.ToString("N0") UZS</div>
+                        <div class="sale-total">@sale.TotalPrice.ToString("N0") TJS</div>
                     </div>
                 }
             </div>
@@ -1325,7 +1325,7 @@
 
             await db.SaveChangesAsync();
 
-            successMessage = $"Sale completed! Total: {CartTotal:N0} UZS";
+            successMessage = $"Sale completed! Total: {CartTotal:N0} TJS";
             cart = new List<CartItem>();
             await LoadProducts();
             await LoadRecentSales();
